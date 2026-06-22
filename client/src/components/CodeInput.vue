@@ -29,7 +29,7 @@ function handleSubmit() {
 <template>
   <div class="code-input">
     <div class="input-header">
-      <label class="input-label">Language</label>
+      <label class="input-label">语言</label>
       <el-select v-model="language" size="small" :disabled="disabled" class="lang-select">
         <el-option
           v-for="lang in languages"
@@ -45,7 +45,7 @@ function handleSubmit() {
       type="textarea"
       :rows="8"
       :disabled="disabled"
-      placeholder="Paste your code here..."
+      placeholder="将代码粘贴到这里..."
       class="code-textarea"
     />
 
@@ -56,7 +56,7 @@ function handleSubmit() {
       @click="handleSubmit"
       class="submit-btn"
     >
-      Start Review
+      开始审查
     </el-button>
   </div>
 </template>

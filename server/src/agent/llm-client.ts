@@ -44,12 +44,18 @@ class LlmClient {
     const body: Record<string, unknown> = {
       model: this.model,
       max_tokens: 4096,
-      messages: messages.map(m => ({
-        role: m.role,
-        content: m.content,
-        ...(m.toolCallId ? { tool_call_id: m.toolCallId } : {}),
-        ...(m.name ? { name: m.name } : {})
-      }))
+      messages: messages.map(m => {
+        const msg: Record<string, unknown> = {
+          role: m.role,
+          content: m.content || ''
+        }
+        if (m.toolCallId) msg.tool_call_id = m.toolCallId
+        if (m.name) msg.name = m.name
+        if (m.toolCalls && m.toolCalls.length > 0) {
+          msg.tool_calls = m.toolCalls
+        }
+        return msg
+      })
     }
 
     if (openaiTools && openaiTools.length > 0) {

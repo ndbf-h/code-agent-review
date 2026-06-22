@@ -6,9 +6,9 @@ defineProps<{
 }>()
 
 function getSeverityLabel(severity: string): string {
-  if (severity === 'critical') return 'Critical'
-  if (severity === 'warning') return 'Warning'
-  return 'Suggestion'
+  if (severity === 'critical') return '高危'
+  if (severity === 'warning') return '警告'
+  return '建议'
 }
 
 function getSeverityClass(severity: string): string {
@@ -27,13 +27,13 @@ function getTagType(severity: string): string {
 <template>
   <div class="review-report">
     <div class="report-header">
-      <span class="report-title">Review Report</span>
-      <span class="report-score">Overall Score: {{ report.score }} / 100</span>
+      <span class="report-title">审查报告</span>
+      <span class="report-score">综合评分：{{ report.score }} / 100</span>
     </div>
 
     <div
       class="report-section"
-      v-for="(label, sevKey) in ({ critical: 'Critical', warning: 'Warning', suggestion: 'Suggestion' } as Record<string, string>)"
+      v-for="(label, sevKey) in ({ critical: '高危', warning: '警告', suggestion: '建议' } as Record<string, string>)"
       :key="sevKey"
     >
       <template v-if="report.issues.filter(i => i.severity === sevKey).length > 0">
@@ -44,7 +44,7 @@ function getTagType(severity: string): string {
           class="issue-card"
         >
           <div class="issue-header">
-            <span class="issue-loc">Line {{ issue.line }}</span>
+            <span class="issue-loc">第 {{ issue.line }} 行</span>
             <span class="issue-category">{{ issue.category }}</span>
             <el-tag :type="getTagType(sevKey)" size="small">
               {{ getSeverityLabel(sevKey) }}

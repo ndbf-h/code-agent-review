@@ -21,7 +21,7 @@ async function runReviewTask(
   language: string,
   onEvent: (event: ReviewEvent) => void
 ): Promise<ReportContent> {
-  onEvent({ type: 'orchestrator_start', message: 'Orchestrator analyzing code...' })
+  onEvent({ type: 'orchestrator_start', message: '正在分析代码结构...' })
 
   const orchRole = getRolePrompt('orchestrator')
   const orchTools = toolRegistry.getDefinitions().filter(t =>
@@ -47,14 +47,14 @@ async function runReviewTask(
     }
   })
 
-  onEvent({ type: 'task_decomposed', message: 'Dispatching reviewers...' })
+  onEvent({ type: 'task_decomposed', message: '正在分配审查任务...' })
 
   const reviewerRoles: AgentRole[] = ['security', 'performance', 'style', 'logic']
   const reviewerResults: Record<string, { issues: Array<{ line: number; severity: string; category: string; message: string; suggestion: string }>; score: number }> = {}
 
   await Promise.all(reviewerRoles.map(async (role) => {
     const reviewerId = `${role}-${taskId}`
-    onEvent({ type: 'agent_start', agentId: reviewerId, role, message: `Started reviewing ${role} dimension` })
+    onEvent({ type: 'agent_start', agentId: reviewerId, role, message: `开始审查 ${role} 维度` })
 
     const rolePrompt = getRolePrompt(role)
     const reviewTools = toolRegistry.getDefinitions().filter(t =>
@@ -96,7 +96,7 @@ async function runReviewTask(
       }
 
       reviewerResults[role] = parsed
-      onEvent({ type: 'agent_done', agentId: reviewerId, role, message: `Completed ${role} review` })
+      onEvent({ type: 'agent_done', agentId: reviewerId, role, message: `${role} 审查完成` })
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error'
       onEvent({ type: 'error', agentId: reviewerId, role, message: errorMsg })
@@ -104,7 +104,7 @@ async function runReviewTask(
     }
   }))
 
-  onEvent({ type: 'orchestrator_summary', message: 'Generating final report...' })
+  onEvent({ type: 'orchestrator_summary', message: '正在生成审查报告...' })
 
   const allIssues: ReportContent['issues'] = Object.values(reviewerResults).flatMap(r =>
     r.issues.map(i => ({ ...i, severity: i.severity as ReportContent['issues'][0]['severity'] }))

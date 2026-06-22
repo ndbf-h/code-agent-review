@@ -7,13 +7,13 @@ defineProps<{
 
 function getRoleLabel(role: string): string {
   const labels: Record<string, string> = {
-    user: 'You',
-    orchestrator: 'Orchestrator',
-    security: 'Security Reviewer',
-    performance: 'Performance Reviewer',
-    style: 'Style Reviewer',
-    logic: 'Logic Reviewer',
-    system: 'System'
+    user: '你',
+    orchestrator: '协调者',
+    security: '安全审查专家',
+    performance: '性能优化专家',
+    style: '代码规范专家',
+    logic: '逻辑审查专家',
+    system: '系统'
   }
   return labels[role] || role
 }
@@ -36,7 +36,7 @@ function getRoleClass(role: string): string {
       <div class="message-content">
         <p v-if="message.type !== 'tool_call'">{{ message.content }}</p>
         <p v-else class="tool-call">
-          <span class="tool-name">Tool: {{ message.toolName }}</span>
+          <span class="tool-name">工具：{{ message.toolName }}</span>
           {{ message.content }}
         </p>
       </div>

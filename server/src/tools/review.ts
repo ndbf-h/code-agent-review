@@ -3,10 +3,10 @@ import type { Tool } from '../agent/tool-registry'
 const analyzeCode: Tool = {
   definition: {
     name: 'analyzeCode',
-    description: 'Analyze the code for issues in a specific dimension',
+    description: '分析代码在指定维度上的问题',
     parameters: {
-      code: { type: 'string', description: 'The code to analyze' },
-      dimension: { type: 'string', description: 'Review dimension: security, performance, style, logic' }
+      code: { type: 'string', description: '待分析的代码' },
+      dimension: { type: 'string', description: '审查维度：security、performance、style、logic' }
     }
   },
   async execute(input: Record<string, unknown>): Promise<string> {
@@ -15,26 +15,26 @@ const analyzeCode: Tool = {
     const mockResults: Record<string, object> = {
       security: {
         issues: [
-          { line: 3, severity: 'critical', category: 'SQL Injection', message: 'String concatenation in SQL query', suggestion: 'Use parameterized queries' }
+          { line: 3, severity: 'critical', category: 'SQL 注入', message: 'SQL 查询中使用了字符串拼接', suggestion: '使用参数化查询替代字符串拼接' }
         ],
         score: 60
       },
       performance: {
         issues: [
-          { line: 4, severity: 'warning', category: 'Query Optimization', message: 'Query inside function may cause N+1 problem', suggestion: 'Consider batching queries' }
+          { line: 4, severity: 'warning', category: '查询优化', message: '函数内数据库查询可能导致 N+1 问题', suggestion: '考虑批量查询' }
         ],
         score: 80
       },
       style: {
         issues: [
-          { line: 1, severity: 'suggestion', category: 'Type Annotation', message: 'Missing parameter type', suggestion: 'Add type annotation' },
-          { line: 1, severity: 'suggestion', category: 'Naming', message: 'Unclear function name', suggestion: 'Use more descriptive name' }
+          { line: 1, severity: 'suggestion', category: '类型注解', message: '缺少参数类型声明', suggestion: '添加类型注解' },
+          { line: 1, severity: 'suggestion', category: '命名规范', message: '函数名不够清晰', suggestion: '使用更具体的名称' }
         ],
         score: 70
       },
       logic: {
         issues: [
-          { line: 2, severity: 'critical', category: 'Null Check', message: 'Parameter may be null', suggestion: 'Add null guard' }
+          { line: 2, severity: 'critical', category: '空值检查', message: '参数可能为 null', suggestion: '添加 null 检查' }
         ],
         score: 75
       }
@@ -47,20 +47,20 @@ const analyzeCode: Tool = {
 const checkPattern: Tool = {
   definition: {
     name: 'checkPattern',
-    description: 'Check code against a specific pattern or rule',
+    description: '按特定模式或规则检查代码',
     parameters: {
-      code: { type: 'string', description: 'The code to check' },
-      pattern: { type: 'string', description: 'Pattern to check: sql_injection, xss, naming, null_check' }
+      code: { type: 'string', description: '待检查的代码' },
+      pattern: { type: 'string', description: '检查模式：sql_injection、xss、naming、null_check' }
     }
   },
   async execute(input: Record<string, unknown>): Promise<string> {
     const pattern = input.pattern as string
 
     const mockResults: Record<string, object> = {
-      sql_injection: { matches: [{ line: 3, pattern: 'string concatenation in SQL', description: 'User input directly concatenated into SQL string' }], count: 1 },
+      sql_injection: { matches: [{ line: 3, pattern: '字符串拼接 SQL', description: '用户输入直接拼接到 SQL 字符串中' }], count: 1 },
       xss: { matches: [], count: 0 },
-      naming: { matches: [{ line: 1, pattern: 'short name', description: "Function name 'getUser' could be more descriptive" }], count: 1 },
-      null_check: { matches: [{ line: 2, pattern: 'missing null guard', description: 'No null/undefined check on parameter before use' }], count: 1 }
+      naming: { matches: [{ line: 1, pattern: '命名过短', description: "函数名 'getUser' 可以更具体" }], count: 1 },
+      null_check: { matches: [{ line: 2, pattern: '缺少空值检查', description: '使用参数前未检查 null/undefined' }], count: 1 }
     }
 
     return JSON.stringify(mockResults[pattern] || { matches: [], count: 0 })
@@ -70,19 +70,19 @@ const checkPattern: Tool = {
 const validateLogic: Tool = {
   definition: {
     name: 'validateLogic',
-    description: 'Validate the logic and check edge cases in the code',
+    description: '验证代码逻辑并检查边界条件',
     parameters: {
-      code: { type: 'string', description: 'The code to validate' }
+      code: { type: 'string', description: '待验证的代码' }
     }
   },
   async execute(_input: Record<string, unknown>): Promise<string> {
     return JSON.stringify({
-      edgeCases: ['null input', 'undefined input', 'empty string input', 'non-string input', 'SQL injection attempt'],
+      edgeCases: ['null 输入', 'undefined 输入', '空字符串输入', '非字符串输入', 'SQL 注入攻击'],
       covered: [false, false, false, false, false],
       suggestions: [
-        'Add null guard at function entry',
-        'Add type check for id parameter',
-        'Use parameterized queries to prevent SQL injection'
+        '在函数入口添加 null 检查',
+        '添加 id 参数的类型检查',
+        '使用参数化查询防止 SQL 注入'
       ]
     })
   }

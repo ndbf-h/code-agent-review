@@ -32,13 +32,22 @@ async function runReActLoop(
     }
 
     if (response.finishReason === 'tool_use') {
+      // 先记录 assistant 消息（含 tool_calls）
+      memory.add({
+        role: 'assistant',
+        content: response.content || '',
+        toolCalls: response.toolCalls.map(tc => ({
+          id: tc.id,
+          type: 'function' as const,
+          function: {
+            name: tc.name,
+            arguments: JSON.stringify(tc.input)
+          }
+        }))
+      })
+
       for (const toolCall of response.toolCalls) {
         if (onStep) onStep('tool_call', toolCall.name, toolCall.input)
-
-        memory.add({
-          role: 'assistant',
-          content: JSON.stringify({ toolCall: toolCall.name, input: toolCall.input })
-        })
 
         try {
           const result = await toolRegistry.execute(toolCall)
@@ -66,7 +75,7 @@ async function runReActLoop(
   // 达到最大轮数
   memory.add({
     role: 'user',
-    content: 'You have reached the maximum number of steps. Please provide your final answer now based on the information gathered.'
+    content: '已达最大调用次数，请基于已收集的信息给出最终结论。'
   })
 
   const context = memory.getContext()

@@ -17,7 +17,7 @@ export function useChat() {
 
     store.addMessage({
       role: 'user',
-      content: `Submitted ${lang} code for review`,
+      content: `提交了 ${lang} 代码进行审查`,
       type: 'user_input'
     })
 
@@ -32,10 +32,10 @@ export function useChat() {
       store.setTaskId(taskId)
       connect(taskId)
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to create task'
+      const message = error instanceof Error ? error.message : '创建任务失败'
       store.addMessage({
         role: 'system',
-        content: `Error: ${message}`,
+        content: `错误：${message}`,
         type: 'agent_thought'
       })
       store.loading = false

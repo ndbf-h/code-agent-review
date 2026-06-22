@@ -1,8 +1,18 @@
+interface ToolCallInMessage {
+  id: string
+  type: 'function'
+  function: {
+    name: string
+    arguments: string
+  }
+}
+
 interface LlmMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
   content: string
   toolCallId?: string
   name?: string
+  toolCalls?: ToolCallInMessage[]
 }
 
 interface ToolDefinition {
@@ -23,4 +33,4 @@ interface LlmResponse {
   toolCalls: ToolCallRequest[]
 }
 
-export type { LlmMessage, ToolDefinition, ToolCallRequest, LlmResponse }
+export type { LlmMessage, ToolDefinition, ToolCallRequest, LlmResponse, ToolCallInMessage }

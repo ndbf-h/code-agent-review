@@ -14,7 +14,7 @@ export function useSSE() {
         store.setStatus('orchestrating')
         store.addMessage({
           role: 'orchestrator',
-          content: (data.message as string) || 'Starting review...',
+          content: (data.message as string) || '开始分析代码...',
           type: 'agent_thought'
         })
       },
@@ -23,7 +23,7 @@ export function useSSE() {
         store.setStatus('reviewing')
         store.addMessage({
           role: (data.role as ChatMessage['role']) || 'system',
-          content: (data.message as string) || 'Started reviewing...',
+          content: (data.message as string) || '开始审查...',
           type: 'agent_thought'
         })
       },
@@ -31,7 +31,7 @@ export function useSSE() {
       agent_thought: (data) => {
         store.addMessage({
           role: (data.role as ChatMessage['role']) || 'system',
-          content: (data.message as string) || 'Thinking...',
+          content: (data.message as string) || '思考中...',
           type: 'agent_thought'
         })
       },
@@ -39,7 +39,7 @@ export function useSSE() {
       tool_call: (data) => {
         store.addMessage({
           role: (data.role as ChatMessage['role']) || 'system',
-          content: `Calling ${data.toolName}...`,
+          content: `正在调用工具 ${data.toolName}...`,
           type: 'tool_call',
           toolName: data.toolName as string
         })
@@ -48,7 +48,7 @@ export function useSSE() {
       agent_done: (data) => {
         store.addMessage({
           role: (data.role as ChatMessage['role']) || 'system',
-          content: (data.message as string) || 'Review completed',
+          content: (data.message as string) || '审查完成',
           type: 'final_answer'
         })
       },
@@ -84,7 +84,7 @@ export function useSSE() {
       error: (data) => {
         store.addMessage({
           role: 'system',
-          content: `Error: ${data.message || 'Unknown error'}`,
+          content: `错误：${data.message || '未知错误'}`,
           type: 'agent_thought'
         })
         store.setStatus('failed')
