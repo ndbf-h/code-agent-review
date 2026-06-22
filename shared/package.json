@@ -1,0 +1,5 @@
+{
+  "name": "code-agent-review-shared",
+  "private": true,
+  "main": "./types.ts"
+}
