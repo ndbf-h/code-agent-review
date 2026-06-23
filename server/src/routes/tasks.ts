@@ -165,11 +165,11 @@ tasksRouter.post('/fetch-url', async (req: Request, res: Response) => {
       return
     }
 
-    const lineCount = text.split('\n').length
+    const lineCount = text.trimEnd().split('\n').length || 1
 
     res.json({
       content: text,
-      byteSize: text.length,
+      byteSize: Buffer.byteLength(text, 'utf8'),
       lineCount
     })
   } catch (error) {
