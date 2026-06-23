@@ -2,6 +2,8 @@ import { Router, type Request, type Response } from 'express'
 import { createTask, createAgentsForTask, saveReport, getTaskDetail, updateTaskStatus } from '../services/taskService'
 import { runReviewTask } from '../agent/orchestrator'
 import type { ReviewEvent } from '../agent/orchestrator'
+import dns from 'node:dns'
+import { isIPv4, isIPv6 } from 'node:net'
 
 const tasksRouter = Router()
 
@@ -95,6 +97,108 @@ tasksRouter.get('/:id/stream', async (req: Request, res: Response) => {
 })
 
 // POST /api/tasks/fetch-url — 抓取 URL 代码内容
+
+const MAX_REDIRECTS = 3
+
+function isPrivateIp(ip: string): boolean {
+  if (isIPv4(ip)) {
+    const parts = ip.split('.').map(Number)
+    if (parts.length !== 4 || parts.some(p => isNaN(p) || p < 0 || p > 255)) return true
+    const [a, b] = parts
+    // 0.0.0.0/8
+    if (a === 0) return true
+    // 10.0.0.0/8
+    if (a === 10) return true
+    // 127.0.0.0/8
+    if (a === 127) return true
+    // 169.254.0.0/16
+    if (a === 169 && b === 254) return true
+    // 172.16.0.0/12
+    if (a === 172 && b >= 16 && b <= 31) return true
+    // 192.168.0.0/16
+    if (a === 192 && b === 168) return true
+    return false
+  }
+  if (isIPv6(ip)) {
+    // ::1
+    if (ip === '::1') return true
+    // fe80::/10
+    if (ip.toLowerCase().startsWith('fe80:')) return true
+    return false
+  }
+  // 无法识别为 IP，保守拒绝
+  return true
+}
+
+async function resolveAndCheckIp(hostname: string): Promise<void> {
+  let addresses: string[] = []
+  try {
+    addresses = await dns.promises.resolve4(hostname).catch(() => [] as string[])
+  } catch {
+    // IPv4 解析失败，继续尝试 IPv6
+  }
+  try {
+    const v6 = await dns.promises.resolve6(hostname).catch(() => [] as string[])
+    addresses = addresses.concat(v6)
+  } catch {
+    // IPv6 解析失败
+  }
+  if (addresses.length === 0) {
+    throw new Error('无法解析域名 IP 地址')
+  }
+  for (const addr of addresses) {
+    if (isPrivateIp(addr)) {
+      throw new Error(`禁止访问内网地址：${addr}`)
+    }
+  }
+}
+
+async function fetchWithRedirectCheck(
+  url: string,
+  controller: AbortController,
+  redirectCount: number
+): Promise<globalThis.Response> {
+  if (redirectCount > MAX_REDIRECTS) {
+    throw new Error('重定向次数超过限制')
+  }
+
+  // 每次请求前校验目标 URL
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    throw new Error('重定向目标 URL 格式不正确')
+  }
+
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('重定向目标使用了不支持的协议')
+  }
+
+  await resolveAndCheckIp(parsed.hostname)
+
+  const fetchRes = await fetch(url, {
+    signal: controller.signal,
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+      'Accept': 'text/plain,text/html;q=0.5'
+    },
+    redirect: 'manual'
+  })
+
+  // 处理重定向
+  const redirectStatuses = [301, 302, 303, 307, 308]
+  if (redirectStatuses.includes(fetchRes.status)) {
+    const location = fetchRes.headers.get('location')
+    if (!location) {
+      return fetchRes
+    }
+    const nextUrl = new URL(location, url).toString()
+    return fetchWithRedirectCheck(nextUrl, controller, redirectCount + 1)
+  }
+
+  return fetchRes
+}
+
 tasksRouter.post('/fetch-url', async (req: Request, res: Response) => {
   try {
     const { url } = req.body
@@ -118,33 +222,40 @@ tasksRouter.post('/fetch-url', async (req: Request, res: Response) => {
       return
     }
 
-    // 抓取内容，10 秒超时
+    // DNS 解析 + IP 校验（防止 SSRF 访问内网）
+    try {
+      await resolveAndCheckIp(parsed.hostname)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'IP 校验失败'
+      res.status(400).json({ error: message })
+      return
+    }
+
+    // 抓取内容，10 秒超时，手动处理重定向
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 10_000)
 
     let fetchRes: globalThis.Response
     try {
-      fetchRes = await fetch(url, {
-        signal: controller.signal,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-          'Accept': 'text/plain,text/html;q=0.5'
-        },
-        redirect: 'follow'
-      })
+      fetchRes = await fetchWithRedirectCheck(url, controller, 0)
     } catch (err) {
       clearTimeout(timeout)
       if (err instanceof Error && err.name === 'AbortError') {
         res.status(408).json({ error: '请求超时，请检查链接是否可访问' })
         return
       }
-      res.status(502).json({ error: '网络请求失败，请检查链接是否有效' })
+      const message = err instanceof Error ? err.message : '网络请求失败'
+      res.status(502).json({ error: message })
       return
     }
     clearTimeout(timeout)
 
     if (!fetchRes.ok) {
-      res.status(502).json({ error: `目标服务器拒绝访问（${fetchRes.status}）` })
+      if (fetchRes.status >= 500) {
+        res.status(502).json({ error: `目标服务器异常（${fetchRes.status}）` })
+      } else {
+        res.status(502).json({ error: `目标服务器拒绝访问（${fetchRes.status}）` })
+      }
       return
     }
 

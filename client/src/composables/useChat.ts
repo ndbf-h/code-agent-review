@@ -3,7 +3,7 @@ import axios from 'axios'
 import { useReviewStore } from '../stores/review'
 import { useSSE } from './useSSE'
 
-const API_BASE = 'http://localhost:3001/api'
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001/api'
 
 export function useChat() {
   const store = useReviewStore()

@@ -6,7 +6,8 @@ export function useSSE() {
   let eventSource: EventSource | null = null
 
   function connect(taskId: string) {
-    const url = `http://localhost:3001/api/tasks/${taskId}/stream`
+    const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001/api'
+    const url = `${API_BASE}/tasks/${taskId}/stream`
     eventSource = new EventSource(url)
 
     const handlers: Record<string, (data: Record<string, unknown>) => void> = {
