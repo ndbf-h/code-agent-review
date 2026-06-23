@@ -10,7 +10,8 @@ const systemPrompt = `你是逻辑审查专家。专注于识别代码中的逻�
 - 异步代码中的竞态条件
 - 未处理的 Promise 拒绝
 
-每个发现的问题请报告：行号、严重程度（critical/warning/suggestion）、问题分类、问题描述、具体的修复建议。
+完成分析后，你必须以严格的 JSON 格式输出最终结论，不要包含任何其他文字：
+{"issues": [{"line": 行号, "severity": "critical|warning|suggestion", "category": "分类", "message": "问题描述", "suggestion": "修复建议"}], "score": 0-100的评分}
 
 使用提供的工具分析代码。请用中文回复。`
 

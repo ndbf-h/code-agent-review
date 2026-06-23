@@ -90,7 +90,19 @@ async function runReviewTask(
 
       let parsed: { issues: Array<{ line: number; severity: string; category: string; message: string; suggestion: string }>; score: number }
       try {
-        parsed = JSON.parse(result)
+        // 尝试从回复中提取 JSON（可能被包裹在 markdown 代码块中）
+        let jsonStr = result
+        const fenceMatch = result.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/)
+        if (fenceMatch) {
+          jsonStr = fenceMatch[1]
+        }
+        const jsonMatch = jsonStr.match(/\{[\s\S]*\}/)
+        if (jsonMatch) {
+          jsonStr = jsonMatch[0]
+        }
+        parsed = JSON.parse(jsonStr)
+        if (!parsed.issues) parsed.issues = []
+        if (typeof parsed.score !== 'number') parsed.score = 0
       } catch {
         parsed = { issues: [], score: 0 }
       }
@@ -117,6 +129,7 @@ async function runReviewTask(
 
   const report: ReportContent = {
     issues: allIssues,
+    score: avgScore,
     agentResults: reviewerResults as unknown as Record<string, AgentResult>
   }
 

@@ -28,6 +28,7 @@ interface AgentResult {
 
 interface ReportContent {
   issues: Issue[]
+  score: number
   agentResults: Record<string, AgentResult>
 }
 
