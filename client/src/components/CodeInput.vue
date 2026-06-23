@@ -24,7 +24,13 @@ const languages = [
   { label: 'JavaScript', value: 'javascript' },
   { label: 'Python', value: 'python' },
   { label: 'Java', value: 'java' },
-  { label: 'Go', value: 'go' }
+  { label: 'Go', value: 'go' },
+  { label: 'Rust', value: 'rust' },
+  { label: 'Ruby', value: 'ruby' },
+  { label: 'C++', value: 'cpp' },
+  { label: 'C', value: 'c' },
+  { label: 'CSS', value: 'css' },
+  { label: 'HTML', value: 'html' }
 ]
 
 async function handleFetchUrl() {
@@ -39,8 +45,9 @@ async function handleFetchUrl() {
     code.value = content
     codeLineCount.value = lineCount
 
-    // 尝试从 URL 后缀推断语言
-    const extMatch = url.match(/\.(\w+)$/)
+    // 尝试从 URL 后缀推断语言（先剥离查询参数和片段）
+    const cleanUrl = url.split('?')[0].split('#')[0]
+    const extMatch = cleanUrl.match(/\.(\w+)$/)
     if (extMatch) {
       const ext = extMatch[1].toLowerCase()
       const extMap: Record<string, string> = {
