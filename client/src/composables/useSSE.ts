@@ -72,7 +72,7 @@ export function useSSE() {
                 suggestion: i.suggestion as string
               })),
               score: (report.score as number) || 0,
-              agentResults: (report.agentResults as Record<string, { issues: Array<Record<string, unknown>>; score: number }>) || {}
+              agentResults: (report.agentResults as Record<string, { issues: Array<{ line: number; severity: 'critical' | 'warning' | 'suggestion'; category: string; message: string; suggestion: string }>; score: number }>) || {}
             }
           })
         }
