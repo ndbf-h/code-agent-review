@@ -4,10 +4,12 @@ import type { ChatMessage } from '../types/index'
 export function useSSE() {
   const store = useReviewStore()
   let eventSource: EventSource | null = null
+  let reconnectAttempted = false
 
   function connect(taskId: string) {
     const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001/api'
     const url = `${API_BASE}/tasks/${taskId}/stream`
+    reconnectAttempted = false
     eventSource = new EventSource(url)
 
     const handlers: Record<string, (data: Record<string, unknown>) => void> = {
@@ -105,8 +107,21 @@ export function useSSE() {
     })
 
     eventSource.onerror = () => {
+      if (!reconnectAttempted) {
+        reconnectAttempted = true
+        eventSource?.close()
+        setTimeout(() => {
+          connect(taskId)
+        }, 2000)
+        return
+      }
       store.loading = false
       store.setStatus('failed')
+      store.addMessage({
+        role: 'system',
+        content: '错误：SSE 连接丢失，请检查网络后重试',
+        type: 'agent_thought'
+      })
       eventSource?.close()
     }
   }
@@ -116,5 +131,12 @@ export function useSSE() {
     eventSource = null
   }
 
-  return { connect, disconnect }
+  function retrySSE(id: string) {
+    disconnect()
+    reconnectAttempted = false
+    store.loading = true
+    connect(id)
+  }
+
+  return { connect, disconnect, retrySSE }
 }
