@@ -4,6 +4,8 @@
 
 **Goal:** Enhance the frontend UX with empty-state guidance, error recovery with retry, and input interaction improvements across 6 existing files.
 
+**Status:** ✅ Complete — all 6 tasks implemented, build verified
+
 **Architecture:** Progressive enhancement within existing files — no new components. Infrastructure changes (useChat/useSSE retry) come first, then UI components that consume them. Independent visual changes (App.vue, CodeInput.vue) can happen in parallel.
 
 **Tech Stack:** Vue 3 + TypeScript + Element Plus + Pinia + Vite
