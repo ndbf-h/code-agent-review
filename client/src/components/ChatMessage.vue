@@ -1,9 +1,15 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { ChatMessage as ChatMessageType } from '../types/index'
 
-defineProps<{
+const props = defineProps<{
   message: ChatMessageType
+  onRetry?: () => void
 }>()
+
+const isError = computed(() =>
+  props.message.role === 'system' && props.message.content.startsWith('错误：')
+)
 
 function getRoleLabel(role: string): string {
   const labels: Record<string, string> = {
@@ -26,7 +32,7 @@ function getRoleClass(role: string): string {
 </script>
 
 <template>
-  <div class="chat-message" :class="getRoleClass(message.role)">
+  <div class="chat-message" :class="[getRoleClass(message.role), { 'is-error': isError }]">
     <div class="message-header">
       <span class="message-role">{{ getRoleLabel(message.role) }}</span>
       <span class="message-time">{{ message.timestamp }}</span>
@@ -40,17 +46,27 @@ function getRoleClass(role: string): string {
           {{ message.content }}
         </p>
       </div>
+      <div v-if="isError && onRetry" class="message-actions">
+        <el-button size="small" type="danger" plain @click="onRetry">
+          重试
+        </el-button>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
 .chat-message {
-  animation: fadeIn 0.2s ease;
+  animation: fadeIn 0.3s ease;
+  padding: 16px 20px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
@@ -58,74 +74,100 @@ function getRoleClass(role: string): string {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
 }
 
 .message-role {
   font-size: 13px;
   font-weight: 600;
-  color: #303133;
+  letter-spacing: -0.1px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.role-orch .message-role {
-  color: #409eff;
+.message-role::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d1d5db;
 }
 
-.role-agent .message-role {
-  color: #67c23a;
-}
+.role-orch .message-role { color: var(--color-primary); }
+.role-orch .message-role::before { background: var(--color-primary); }
 
-.role-user .message-role {
-  color: #e6a23c;
-}
+.role-agent .message-role { color: #059669; }
+.role-agent .message-role::before { background: #10b981; }
+
+.role-user .message-role { color: #d97706; }
+.role-user .message-role::before { background: #f59e0b; }
 
 .message-time {
   font-size: 11px;
-  color: #c0c4cc;
+  font-weight: 500;
+  color: var(--color-text-muted);
 }
 
 .message-body {
   display: flex;
-  gap: 12px;
+  gap: 14px;
 }
 
 .message-line {
-  width: 2px;
-  min-width: 2px;
-  background: #e4e7ed;
-  border-radius: 1px;
+  width: 3px;
+  min-width: 3px;
+  border-radius: 2px;
+  background: var(--color-border);
 }
 
 .role-orch .message-line {
-  background: #409eff;
+  background: linear-gradient(180deg, var(--color-primary), var(--color-accent));
 }
 
 .role-agent .message-line {
-  background: #67c23a;
+  background: linear-gradient(180deg, #10b981, #34d399);
 }
 
 .role-user .message-line {
-  background: #e6a23c;
+  background: linear-gradient(180deg, #f59e0b, #fbbf24);
 }
 
 .message-content {
   font-size: 14px;
-  line-height: 1.7;
-  color: #606266;
+  line-height: 1.75;
+  color: var(--color-text-secondary);
+}
+
+.message-content p {
+  margin: 0;
 }
 
 .tool-call {
   font-size: 13px;
-  color: #909399;
+  color: var(--color-text-muted);
 }
 
 .tool-name {
   display: inline-block;
-  background: #ecf5ff;
-  color: #409eff;
-  padding: 1px 6px;
-  border-radius: 3px;
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  padding: 2px 10px;
+  border-radius: 12px;
   font-size: 12px;
-  margin-right: 6px;
+  font-weight: 600;
+  margin-right: 8px;
+  letter-spacing: -0.1px;
+}
+
+.chat-message.is-error {
+  border-left: 3px solid var(--color-danger);
+  background: #fef2f2;
+}
+
+.message-actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
 }
 </style>
