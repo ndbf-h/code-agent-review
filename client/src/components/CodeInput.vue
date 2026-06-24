@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch, nextTick } from 'vue'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 
@@ -18,6 +18,8 @@ const language = ref('typescript')
 const urlInput = ref('')
 const fetching = ref(false)
 const codeLineCount = ref(0)
+const urlError = ref('')
+const textareaRows = ref(8)
 
 const languages = [
   { label: 'TypeScript', value: 'typescript' },
@@ -33,11 +35,22 @@ const languages = [
   { label: 'HTML', value: 'html' }
 ]
 
+watch(code, () => {
+  const lines = code.value.split('\n').length
+  textareaRows.value = Math.min(20, Math.max(8, lines + 2))
+  if (code.value.trim()) {
+    codeLineCount.value = lines
+  } else {
+    codeLineCount.value = 0
+  }
+})
+
 async function handleFetchUrl() {
   const url = urlInput.value.trim()
   if (!url) return
 
   fetching.value = true
+  urlError.value = ''
   try {
     const response = await axios.post(`${API_BASE}/tasks/fetch-url`, { url })
     const { content, lineCount } = response.data
@@ -45,25 +58,16 @@ async function handleFetchUrl() {
     code.value = content
     codeLineCount.value = lineCount
 
-    // 尝试从 URL 后缀推断语言（先剥离查询参数和片段）
     const cleanUrl = url.split('?')[0].split('#')[0]
     const extMatch = cleanUrl.match(/\.(\w+)$/)
     if (extMatch) {
       const ext = extMatch[1].toLowerCase()
       const extMap: Record<string, string> = {
-        ts: 'typescript',
-        tsx: 'typescript',
-        js: 'javascript',
-        jsx: 'javascript',
-        py: 'python',
-        java: 'java',
-        go: 'go',
-        rs: 'rust',
-        rb: 'ruby',
-        cpp: 'cpp',
-        c: 'c',
-        css: 'css',
-        html: 'html'
+        ts: 'typescript', tsx: 'typescript',
+        js: 'javascript', jsx: 'javascript',
+        py: 'python', java: 'java', go: 'go',
+        rs: 'rust', rb: 'ruby', cpp: 'cpp',
+        c: 'c', css: 'css', html: 'html'
       }
       if (extMap[ext]) {
         language.value = extMap[ext]
@@ -76,13 +80,27 @@ async function handleFetchUrl() {
       ElMessage.success(`已抓取 ${lineCount} 行 ${language.value} 代码，可编辑后提交审查`)
     }
   } catch (error) {
-    let message = '网络请求失败，请检查链接'
     if (axios.isAxiosError(error) && error.response?.data?.error) {
-      message = error.response.data.error
+      urlError.value = error.response.data.error
+    } else {
+      urlError.value = '网络请求失败，请检查链接'
     }
-    ElMessage.error(message)
   } finally {
     fetching.value = false
+  }
+}
+
+function clearCode() {
+  code.value = ''
+  codeLineCount.value = 0
+  textareaRows.value = 8
+  urlError.value = ''
+}
+
+function onKeydown(e: KeyboardEvent) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault()
+    handleSubmit()
   }
 }
 
@@ -104,6 +122,16 @@ function handleSubmit() {
           :value="lang.value"
         />
       </el-select>
+      <span class="header-spacer"></span>
+      <el-button
+        v-if="code.trim()"
+        size="small"
+        type="default"
+        text
+        @click="clearCode"
+      >
+        清空
+      </el-button>
     </div>
 
     <!-- URL 抓取栏 -->
@@ -128,6 +156,8 @@ function handleSubmit() {
       </el-button>
     </div>
 
+    <div v-if="urlError" class="url-error">{{ urlError }}</div>
+
     <!-- 代码行数提示 -->
     <div v-if="codeLineCount > 0 && !disabled" class="line-hint">
       {{ codeLineCount }} 行 · {{ code.length.toLocaleString() }} 字符
@@ -136,21 +166,25 @@ function handleSubmit() {
     <el-input
       v-model="code"
       type="textarea"
-      :rows="8"
+      :rows="textareaRows"
       :disabled="disabled"
       placeholder="将代码粘贴到这里，或在上方输入 URL 后点击「抓取」"
       class="code-textarea"
+      @keydown="onKeydown"
     />
 
-    <el-button
-      type="primary"
-      :disabled="disabled || !code.trim()"
-      :loading="disabled"
-      @click="handleSubmit"
-      class="submit-btn"
-    >
-      开始审查
-    </el-button>
+    <div class="submit-row">
+      <el-button
+        type="primary"
+        :disabled="disabled || !code.trim()"
+        :loading="disabled"
+        @click="handleSubmit"
+        class="submit-btn"
+      >
+        {{ disabled ? '审查中...' : '开始审查' }}
+      </el-button>
+      <span class="shortcut-hint">Ctrl+Enter 快速提交</span>
+    </div>
   </div>
 </template>
 
@@ -158,48 +192,106 @@ function handleSubmit() {
 .code-input {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
 }
 
 .input-header {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
 
 .input-label {
   font-size: 13px;
-  font-weight: 500;
-  color: #606266;
+  font-weight: 600;
+  color: var(--color-text);
+  letter-spacing: -0.1px;
 }
 
 .lang-select {
-  width: 160px;
+  width: 170px;
+}
+
+.header-spacer {
+  flex: 1;
 }
 
 .url-row {
   display: flex;
-  gap: 8px;
+  gap: 10px;
 }
 
 .url-input {
   flex: 1;
 }
 
+.url-error {
+  font-size: 12px;
+  color: var(--color-danger);
+  margin-top: -8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.url-error::before {
+  content: '⚠';
+  font-size: 12px;
+}
+
 .line-hint {
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-muted);
   margin-top: -8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.line-hint::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-success);
 }
 
 .code-textarea :deep(textarea) {
-  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
-  font-size: 13px;
-  line-height: 1.6;
-  max-height: 400px;
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  line-height: 1.7;
+  max-height: 420px;
+  border-radius: var(--radius-sm);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.code-textarea :deep(textarea):focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(59, 92, 246, 0.1);
 }
 
 .submit-btn {
   align-self: flex-start;
+  font-weight: 600;
+  letter-spacing: -0.1px;
+  border-radius: 20px;
+  padding: 8px 24px;
+  height: auto;
+}
+
+.submit-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.shortcut-hint {
+  font-size: 12px;
+  color: var(--color-text-muted);
 }
 </style>
