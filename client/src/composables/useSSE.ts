@@ -9,7 +9,6 @@ export function useSSE() {
   function connect(taskId: string) {
     const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001/api'
     const url = `${API_BASE}/tasks/${taskId}/stream`
-    reconnectAttempted = false
     eventSource = new EventSource(url)
 
     const handlers: Record<string, (data: Record<string, unknown>) => void> = {
