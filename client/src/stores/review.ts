@@ -7,6 +7,7 @@ interface AgentSlot {
   label: string
   status: 'idle' | 'working' | 'done' | 'error'
   latestMessage: string
+  streamBuffer?: string
 }
 
 const AGENT_LABELS: Record<string, string> = {
@@ -29,6 +30,15 @@ export const useReviewStore = defineStore('review', () => {
       id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       timestamp: new Date().toLocaleTimeString('en-US', { hour12: false })
     })
+  }
+
+  /** 追加流式 token 到指定 Agent 的思考内容 */
+  function appendToken(role: AgentRole, token: string): void {
+    const idx = agentSlots.value.findIndex(s => s.role === role)
+    if (idx >= 0) {
+      agentSlots.value[idx].streamBuffer = (agentSlots.value[idx].streamBuffer || '') + token
+      agentSlots.value[idx].latestMessage = agentSlots.value[idx].streamBuffer || ''
+    }
   }
 
   function upsertAgentSlot(role: AgentRole, info: Partial<Pick<AgentSlot, 'status' | 'latestMessage'>>) {
@@ -62,5 +72,5 @@ export const useReviewStore = defineStore('review', () => {
     agentSlots.value = []
   }
 
-  return { taskId, status, messages, loading, agentSlots, addMessage, upsertAgentSlot, setStatus, setTaskId, reset }
+  return { taskId, status, messages, loading, agentSlots, addMessage, upsertAgentSlot, appendToken, setStatus, setTaskId, reset }
 })

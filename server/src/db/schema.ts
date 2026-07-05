@@ -1,9 +1,10 @@
-import { getDb, saveDb } from './connection'
+import { getDb } from './connection'
 
-async function initDb(): Promise<void> {
-  const db = await getDb()
+export function initDb(): void {
+  const db = getDb()
 
-  db.run(`
+  // better-sqlite3 是同步的，移除所有 saveDb() 调用
+  db.exec(`
     CREATE TABLE IF NOT EXISTS tasks (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
@@ -14,7 +15,7 @@ async function initDb(): Promise<void> {
     )
   `)
 
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS agents (
       id TEXT PRIMARY KEY,
       task_id TEXT NOT NULL,
@@ -26,7 +27,7 @@ async function initDb(): Promise<void> {
     )
   `)
 
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS messages (
       id TEXT PRIMARY KEY,
       task_id TEXT NOT NULL,
@@ -40,7 +41,7 @@ async function initDb(): Promise<void> {
     )
   `)
 
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS tool_calls (
       id TEXT PRIMARY KEY,
       agent_id TEXT NOT NULL,
@@ -54,7 +55,7 @@ async function initDb(): Promise<void> {
     )
   `)
 
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS reports (
       id TEXT PRIMARY KEY,
       task_id TEXT NOT NULL UNIQUE,
@@ -64,8 +65,4 @@ async function initDb(): Promise<void> {
       FOREIGN KEY (task_id) REFERENCES tasks(id)
     )
   `)
-
-  saveDb()
 }
-
-export { initDb }

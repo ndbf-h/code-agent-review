@@ -1,33 +1,37 @@
-import initSqlJs, { type Database as SqlJsDatabase } from 'sql.js'
-import fs from 'fs'
+import Database from 'better-sqlite3'
 import path from 'path'
+import fs from 'fs'
 
-const DB_PATH = path.join(__dirname, '..', '..', 'data.db')
+type DatabaseInstance = InstanceType<typeof Database>
 
-let db: SqlJsDatabase | null = null
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', '..', '.data', 'review.db')
 
-async function getDb(): Promise<SqlJsDatabase> {
+let db: DatabaseInstance | null = null
+
+function ensureDir(filePath: string): void {
+  const dir = path.dirname(filePath)
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true })
+  }
+}
+
+export function getDb(): DatabaseInstance {
   if (db) return db
 
-  const SQL = await initSqlJs()
+  ensureDir(DB_PATH)
+  db = new Database(DB_PATH)
 
-  // 尝试从文件加载已有数据库，否则创建新的
-  if (fs.existsSync(DB_PATH)) {
-    const buffer = fs.readFileSync(DB_PATH)
-    db = new SQL.Database(buffer)
-  } else {
-    db = new SQL.Database()
-  }
+  // 性能优化
+  db.pragma('journal_mode = WAL')
+  db.pragma('foreign_keys = ON')
+  db.pragma('busy_timeout = 5000')
 
-  db.run('PRAGMA foreign_keys = ON')
   return db
 }
 
-function saveDb(): void {
-  if (!db) return
-  const data = db.export()
-  const buffer = Buffer.from(data)
-  fs.writeFileSync(DB_PATH, buffer)
+export function closeDb(): void {
+  if (db) {
+    db.close()
+    db = null
+  }
 }
-
-export { getDb, saveDb }

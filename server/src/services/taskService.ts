@@ -12,7 +12,7 @@ async function createTask(code: string, language: string, title?: string): Promi
     createdAt: new Date().toISOString()
   }
 
-  await insertTask(task)
+  insertTask(task)
   return task
 }
 
@@ -29,7 +29,7 @@ async function createAgentsForTask(taskId: string): Promise<void> {
       modelName,
       createdAt: new Date().toISOString()
     }
-    await insertAgent(agent)
+    insertAgent(agent)
   }
 }
 
@@ -41,7 +41,7 @@ async function saveReport(taskId: string, reportContent: ReportContent, score: n
     score,
     createdAt: new Date().toISOString()
   }
-  await insertReport(report)
+  insertReport(report)
 }
 
 async function getTaskDetail(taskId: string): Promise<{
@@ -50,10 +50,10 @@ async function getTaskDetail(taskId: string): Promise<{
   messages: Message[]
   report: { content: ReportContent; score: number } | null
 }> {
-  const task = await getTask(taskId)
-  const agents = await getAgentsByTask(taskId)
-  const messages = await getMessagesByTask(taskId)
-  const report = await getReportByTask(taskId)
+  const task = getTask(taskId)
+  const agents = getAgentsByTask(taskId)
+  const messages = getMessagesByTask(taskId)
+  const report = getReportByTask(taskId)
 
   let reportData = null
   if (report) {

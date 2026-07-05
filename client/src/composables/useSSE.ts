@@ -37,6 +37,12 @@ export function useSSE() {
         })
       },
 
+      thinking_token: (data) => {
+        const role = (data.role as AgentRole) || 'security'
+        const token = (data.message as string) || ''
+        store.appendToken(role, token)
+      },
+
       tool_call: (data) => {
         const role = (data.role as AgentRole) || 'security'
         store.upsertAgentSlot(role, {
@@ -81,13 +87,20 @@ export function useSSE() {
       },
 
       error: (data) => {
-        store.addMessage({
-          role: 'system',
-          content: `错误：${data.message || '未知错误'}`,
-          type: 'agent_thought'
-        })
-        store.setStatus('failed')
-        store.loading = false
+        const agentId = data.agentId as string | undefined
+        const message = (data.message as string) || '未知错误'
+        if (agentId) {
+          const role = (data.role as AgentRole) || 'security'
+          store.upsertAgentSlot(role, { status: 'error', latestMessage: message })
+        } else {
+          store.addMessage({
+            role: 'system',
+            content: `错误：${message}`,
+            type: 'agent_thought'
+          })
+          store.setStatus('failed')
+          store.loading = false
+        }
       }
     }
 

@@ -43,6 +43,17 @@ tasksRouter.get('/:id', async (req: Request, res: Response, next: NextFunction) 
 tasksRouter.get('/:id/stream', async (req: Request, res: Response) => {
   const taskId = req.params.id
 
+  // 并发控制：检查活跃任务数
+  const locals = req.app.locals as { activeTaskCount: number; maxConcurrentTasks: number }
+  if (locals.activeTaskCount >= locals.maxConcurrentTasks) {
+    res.status(503).json({
+      error: `当前审查任务已满（${locals.maxConcurrentTasks} 个），请等待...`,
+      code: 'CONCURRENCY_LIMITED'
+    })
+    return
+  }
+  locals.activeTaskCount++
+
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
@@ -55,16 +66,16 @@ tasksRouter.get('/:id/stream', async (req: Request, res: Response) => {
     res.write(`data: ${JSON.stringify(data)}\n\n`)
   }
 
-  const detail = await getTaskDetail(taskId)
-  if (!detail.task) {
-    sendEvent('error', { message: 'Task not found' })
-    res.end()
-    return
-  }
-
-  await updateTaskStatus(taskId, 'orchestrating')
-
   try {
+    const detail = await getTaskDetail(taskId)
+    if (!detail.task) {
+      sendEvent('error', { message: 'Task not found' })
+      res.end()
+      return
+    }
+
+    await updateTaskStatus(taskId, 'orchestrating')
+
     const reportContent = await runReviewTask(
       taskId,
       detail.task.codeSnippet,
@@ -88,9 +99,10 @@ tasksRouter.get('/:id/stream', async (req: Request, res: Response) => {
     const message = error instanceof Error ? error.message : 'Unknown error'
     sendEvent('error', { message })
     await updateTaskStatus(taskId, 'failed')
+  } finally {
+    locals.activeTaskCount--
+    res.end()
   }
-
-  res.end()
 })
 
 // POST /api/tasks/fetch-url — 抓取 URL 代码内容
