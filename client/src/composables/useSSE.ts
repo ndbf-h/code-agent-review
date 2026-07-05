@@ -116,6 +116,12 @@ export function useSSE() {
     })
 
     eventSource.onerror = () => {
+      // 任务已完成或已失败 → 正常结束，不重连也不覆盖状态
+      if (store.status === 'completed' || store.status === 'failed') {
+        eventSource?.close()
+        return
+      }
+
       if (!reconnectAttempted) {
         reconnectAttempted = true
         eventSource?.close()

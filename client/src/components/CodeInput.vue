@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
+import { detectLanguage } from '../utils/detectLanguage'
 
 const props = defineProps<{
   disabled: boolean
@@ -20,6 +21,9 @@ const fetching = ref(false)
 const codeLineCount = ref(0)
 const urlError = ref('')
 const textareaRows = ref(8)
+const detectedLang = ref<string | null>(null)
+/** 用户是否手动改过语言（手动选择后不再自动覆盖） */
+const userPickedLang = ref(false)
 
 const languages = [
   { label: 'TypeScript', value: 'typescript' },
@@ -42,8 +46,26 @@ watch(code, () => {
     codeLineCount.value = lines
   } else {
     codeLineCount.value = 0
+    detectedLang.value = null
+    return
+  }
+
+  // 自动检测语言：仅在用户未手动选择时生效
+  if (!userPickedLang.value && code.value.trim().length > 20) {
+    const result = detectLanguage(code.value)
+    if (result.confident && languages.some(l => l.value === result.language)) {
+      language.value = result.language
+      detectedLang.value = result.language
+    }
   }
 })
+
+/** 用户手动切换语言：记录选择，后续不再自动覆盖 */
+function onLangChange(value: string) {
+  language.value = value
+  userPickedLang.value = true
+  detectedLang.value = null
+}
 
 async function handleFetchUrl() {
   const url = urlInput.value.trim()
@@ -95,6 +117,8 @@ function clearCode() {
   codeLineCount.value = 0
   textareaRows.value = 8
   urlError.value = ''
+  userPickedLang.value = false
+  detectedLang.value = null
 }
 
 function onKeydown(e: KeyboardEvent) {
@@ -114,7 +138,13 @@ function handleSubmit() {
   <div class="code-input">
     <div class="input-header">
       <label class="input-label">语言</label>
-      <el-select v-model="language" size="small" :disabled="disabled" class="lang-select">
+      <el-select
+        :model-value="language"
+        @update:model-value="onLangChange"
+        size="small"
+        :disabled="disabled"
+        class="lang-select"
+      >
         <el-option
           v-for="lang in languages"
           :key="lang.value"
@@ -122,6 +152,7 @@ function handleSubmit() {
           :value="lang.value"
         />
       </el-select>
+      <span v-if="detectedLang && detectedLang === language" class="auto-detect-badge">自动识别</span>
       <span class="header-spacer"></span>
       <el-button
         v-if="code.trim()"
@@ -215,6 +246,30 @@ function handleSubmit() {
 
 .lang-select {
   width: 170px;
+}
+
+.auto-detect-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #059669;
+  background: #d1fae5;
+  border-radius: 10px;
+  white-space: nowrap;
+  animation: badge-pop 0.25s ease;
+}
+
+.auto-detect-badge::before {
+  content: '✨';
+  font-size: 10px;
+}
+
+@keyframes badge-pop {
+  0% { opacity: 0; transform: scale(0.8); }
+  100% { opacity: 1; transform: scale(1); }
 }
 
 .header-spacer {
