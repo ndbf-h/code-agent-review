@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import type { ReviewReport as ReviewReportType, Issue } from '../types/index'
 
 const props = defineProps<{
@@ -35,6 +35,24 @@ const counts = computed(() => {
     if (i.severity in c) c[i.severity as keyof typeof c]++
   })
   return c
+})
+
+const animatedScore = ref(0)
+
+onMounted(() => {
+  const target = props.report.score
+  const duration = 800
+  const start = performance.now()
+  function animate(now: number) {
+    const elapsed = now - start
+    const progress = Math.min(elapsed / duration, 1)
+    const eased = 1 - Math.pow(1 - progress, 3) // ease-out cubic
+    animatedScore.value = Math.round(eased * target)
+    if (progress < 1) {
+      requestAnimationFrame(animate)
+    }
+  }
+  requestAnimationFrame(animate)
 })
 
 function truncate(text: string, max: number): string {
@@ -75,7 +93,7 @@ function toggleDim(key: string) {
     <!-- 1. Compact Score Bar -->
     <div class="score-bar">
       <div class="score-ring" :style="{ '--score-color': getScoreColor(report.score) }">
-        <span class="score-num">{{ report.score }}</span>
+        <span class="score-num">{{ animatedScore }}</span>
         <span class="score-max">/100</span>
       </div>
       <div class="score-info">

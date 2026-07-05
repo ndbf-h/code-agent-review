@@ -1,36 +1,14 @@
-interface ToolCallInMessage {
-  id: string
-  type: 'function'
-  function: {
-    name: string
-    arguments: string
-  }
-}
+// ── LLM 类型（重导出） ──
+// 所有 LLM 相关类型定义已移至 llm-types.ts
+// 此文件保留仅用于向后兼容
 
-interface LlmMessage {
-  role: 'system' | 'user' | 'assistant' | 'tool'
-  content: string
-  toolCallId?: string
-  name?: string
-  toolCalls?: ToolCallInMessage[]
-}
-
-interface ToolDefinition {
-  name: string
-  description: string
-  parameters: Record<string, unknown>
-}
-
-interface ToolCallRequest {
-  id: string
-  name: string
-  input: Record<string, unknown>
-}
-
-interface LlmResponse {
-  content: string
-  finishReason: 'stop' | 'tool_use' | 'error'
-  toolCalls: ToolCallRequest[]
-}
-
-export type { LlmMessage, ToolDefinition, ToolCallRequest, LlmResponse, ToolCallInMessage }
+export type {
+  LlmMessage,
+  ToolDefinition,
+  ToolCallRequest,
+  LlmResponse,
+  ToolCallInMessage,
+  StreamChunk,
+  LlmConfig,
+  ChatOptions
+} from './llm-types'

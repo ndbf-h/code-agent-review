@@ -37,6 +37,24 @@ npm run dev
 
 通过环境变量 `LOG_LEVEL` 控制输出级别（默认 `DEBUG`），例如 `LOG_LEVEL=INFO` 将只输出 INFO 及以上级别。
 
+## 测试
+
+项目使用 Vitest 作为测试框架。
+
+```bash
+# 运行后端测试
+cd server && npm test
+
+# 运行前端测试
+cd client && npm test
+
+# 监听模式
+npm run test:watch
+```
+
+- **后端**：Node 环境，测试 Agent 引擎核心模块（tool-registry、llm-client）
+- **前端**：jsdom 环境，支持 Vue 组件测试（@vue/test-utils）
+
 ## 项目结构
 
 ```
