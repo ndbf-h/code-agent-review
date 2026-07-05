@@ -41,19 +41,20 @@ export function scanCode(code: string, rules: Rule[], language?: string): RuleMa
     // 重置正则的 lastIndex，避免全局状态污染
     rule.pattern.lastIndex = 0
 
-    let match: RegExpMatchArray | null
-    while ((match = rule.pattern.exec(code)) !== null) {
+    let execResult: ReturnType<typeof rule.pattern.exec>
+    while ((execResult = rule.pattern.exec(code)) !== null) {
+      const matchIndex = execResult.index
+      const matchText = execResult[0]
+
       // 计算匹配位置对应的行号
-      const beforeMatch = code.substring(0, match.index)
+      const beforeMatch = code.substring(0, matchIndex)
       const line = beforeMatch.split('\n').length
       const lastNewline = beforeMatch.lastIndexOf('\n')
-      const column = match.index - lastNewline
+      const column = matchIndex - lastNewline
 
       const message = typeof rule.message === 'function'
-        ? rule.message(match)
+        ? rule.message(execResult)
         : rule.message
-
-      const matchLength = match[0].length
 
       matches.push({
         line,
@@ -62,11 +63,11 @@ export function scanCode(code: string, rules: Rule[], language?: string): RuleMa
         category: rule.category,
         message,
         suggestion: rule.suggestion,
-        snippet: code.substring(match.index, Math.min(match.index + matchLength + 40, code.length)).split('\n')[0]
+        snippet: code.substring(matchIndex, Math.min(matchIndex + matchText.length + 40, code.length)).split('\n')[0]
       })
 
       // 防止无限循环（零长度匹配）
-      if (match.index === rule.pattern.lastIndex) {
+      if (matchIndex === rule.pattern.lastIndex) {
         rule.pattern.lastIndex++
       }
     }

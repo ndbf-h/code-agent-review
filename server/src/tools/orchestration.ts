@@ -10,6 +10,7 @@ const decomposeTask: Tool = {
     }
   },
   async execute(_input: Record<string, unknown>): Promise<string> {
+    // 占位：LLM 将基于输入代码动态填充 subTasks
     return JSON.stringify({
       dimensions: ['安全审查', '性能审查', '风格审查', '逻辑审查'],
       subTasks: [
@@ -32,6 +33,7 @@ const assignAgent: Tool = {
     }
   },
   async execute(input: Record<string, unknown>): Promise<string> {
+    // 占位：LLM 将根据 agentRole 和 subTask 动态分配
     return JSON.stringify({
       agentId: `agent-${input.agentRole}-${Date.now()}`,
       assigned: true,
@@ -49,31 +51,31 @@ const collectResults: Tool = {
     }
   },
   async execute(_input: Record<string, unknown>): Promise<string> {
+    // 占位：LLM 将动态收集各 Agent 的审查结果
     return JSON.stringify({
       results: [
         {
           agentRole: 'security',
           findings: [
-            { line: 3, severity: 'critical', category: 'SQL 注入', message: '用户输入直接拼接到 SQL 查询', suggestion: '使用参数化查询' }
+            { line: 0, severity: 'info', category: '待审查', message: '安全审查结果将由 security agent 填充', suggestion: '' }
           ]
         },
         {
           agentRole: 'performance',
           findings: [
-            { line: 4, severity: 'warning', category: '同步阻塞', message: '数据库查询可能阻塞事件循环', suggestion: '考虑使用异步查询方法' }
+            { line: 0, severity: 'info', category: '待审查', message: '性能审查结果将由 performance agent 填充', suggestion: '' }
           ]
         },
         {
           agentRole: 'style',
           findings: [
-            { line: 1, severity: 'suggestion', category: '类型注解', message: '函数参数缺少类型注解', suggestion: '添加显式类型：function getUser(id: string)' },
-            { line: 1, severity: 'suggestion', category: '命名规范', message: '函数名不够清晰', suggestion: "建议改为 'getUserById'" }
+            { line: 0, severity: 'info', category: '待审查', message: '风格审查结果将由 style agent 填充', suggestion: '' }
           ]
         },
         {
           agentRole: 'logic',
           findings: [
-            { line: 2, severity: 'critical', category: '空值安全', message: '参数 id 可能为 null 或 undefined', suggestion: '在函数入口添加空值检查' }
+            { line: 0, severity: 'info', category: '待审查', message: '逻辑审查结果将由 logic agent 填充', suggestion: '' }
           ]
         }
       ]
@@ -91,15 +93,12 @@ const generateReport: Tool = {
     }
   },
   async execute(_input: Record<string, unknown>): Promise<string> {
+    // 占位：LLM 将基于 reviews 结果动态生成报告
     return JSON.stringify({
       reportId: `report-${Date.now()}`,
-      score: 62,
-      issues: [
-        { line: 3, severity: 'critical', category: 'SQL 注入风险', message: '用户输入拼接到查询语句中', suggestion: '改用参数化查询' },
-        { line: 2, severity: 'critical', category: '缺少空值检查', message: '参数可能为 null 或 undefined', suggestion: '在函数入口添加空值检查' },
-        { line: 1, severity: 'warning', category: '缺少类型注解', message: '函数参数缺少显式类型', suggestion: '添加：function getUser(id: string)' },
-        { line: 1, severity: 'suggestion', category: '命名规范', message: '建议使用更明确的命名', suggestion: "函数名改为 'getUserById'" }
-      ]
+      score: 0,
+      summary: '报告将由 LLM 基于审查结果动态生成',
+      issues: []
     })
   }
 }

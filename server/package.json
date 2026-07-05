@@ -13,7 +13,6 @@
     "cors": "^2.8.5",
     "dotenv": "^17.4.2",
     "express": "^4.21.0",
-    "sql.js": "^1.11.0",
     "uuid": "^10.0.0"
   },
   "devDependencies": {

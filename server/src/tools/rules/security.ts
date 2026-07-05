@@ -4,7 +4,7 @@ import type { Rule } from './types'
 export const securityRules: Rule[] = [
   {
     name: 'sql-string-concat',
-    pattern: /(["'`]\s*\+\s*|\$\{.*\})\s*(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE)\b/gi,
+    pattern: /(?:["'`]\s*\+\s*["'`]?\s*(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE)\b|\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE)\b[^;{]*\+["'`]?\s*\w+)/gi,
     severity: 'critical',
     category: 'SQL 注入',
     message: (m) => `疑似 SQL 字符串拼接：${m[0].substring(0, 40)}`,
