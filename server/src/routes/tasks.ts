@@ -1,4 +1,5 @@
-import { Router, type Request, type Response } from 'express'
+import { Router, type Request, type Response, type NextFunction } from 'express'
+import { ValidationError, TaskError } from '../errors'
 import { createTask, createAgentsForTask, saveReport, getTaskDetail, updateTaskStatus } from '../services/taskService'
 import { runReviewTask } from '../agent/orchestrator'
 import type { ReviewEvent } from '../agent/orchestrator'
@@ -8,13 +9,12 @@ import { isIPv4, isIPv6 } from 'node:net'
 const tasksRouter = Router()
 
 // POST /api/tasks
-tasksRouter.post('/', async (req: Request, res: Response) => {
+tasksRouter.post('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { code, language, title } = req.body
 
     if (!code || !language) {
-      res.status(400).json({ error: 'code and language are required' })
-      return
+      throw new ValidationError('code 和 language 为必填项')
     }
 
     const task = await createTask(code, language, title)
@@ -22,23 +22,20 @@ tasksRouter.post('/', async (req: Request, res: Response) => {
 
     res.status(201).json(task)
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error'
-    res.status(500).json({ error: message })
+    next(error)
   }
 })
 
 // GET /api/tasks/:id
-tasksRouter.get('/:id', async (req: Request, res: Response) => {
+tasksRouter.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const detail = await getTaskDetail(req.params.id)
     if (!detail.task) {
-      res.status(404).json({ error: 'Task not found' })
-      return
+      throw new TaskError('Task not found', 'TASK_NOT_FOUND', 404)
     }
     res.json(detail)
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error'
-    res.status(500).json({ error: message })
+    next(error)
   }
 })
 
