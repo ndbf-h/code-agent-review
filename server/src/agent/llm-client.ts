@@ -1,4 +1,7 @@
 import type { LlmMessage, ToolDefinition, LlmResponse, ToolCallRequest } from './types'
+import { createLogger } from '../logger'
+
+const logger = createLogger('llm-client')
 
 const LLM_API_KEY = process.env.LLM_API_KEY || ''
 const LLM_BASE_URL = process.env.LLM_BASE_URL || 'https://api.deepseek.com'
@@ -28,6 +31,12 @@ class LlmClient {
   // ── OpenAI / DeepSeek 兼容格式 ──
 
   private async chatOpenAI(messages: LlmMessage[], tools?: ToolDefinition[]): Promise<LlmResponse> {
+    logger.debug('LLM 请求开始', {
+      model: this.model,
+      provider: this.provider,
+      messageCount: messages.length
+    })
+
     const openaiTools = tools?.map(t => ({
       type: 'function',
       function: {
@@ -73,6 +82,7 @@ class LlmClient {
 
     if (!response.ok) {
       const errorText = await response.text()
+      logger.error('LLM 请求失败', { status: response.status, body: errorText })
       throw new Error(`LLM API error: ${response.status} ${errorText}`)
     }
 
@@ -90,6 +100,7 @@ class LlmClient {
 
     const choice = choices[0]
     if (!choice) {
+      logger.warn('LLM 返回空 choices')
       return { content: '', finishReason: 'error', toolCalls: [] }
     }
 
@@ -110,9 +121,13 @@ class LlmClient {
         })
       : []
 
+    const contentLength = msg.content?.length || 0
+    const finishReason = hasToolCalls ? 'tool_use' : 'stop'
+    logger.info('LLM 响应成功', { finishReason, contentLength })
+
     return {
       content: msg.content || '',
-      finishReason: hasToolCalls ? 'tool_use' : 'stop',
+      finishReason,
       toolCalls
     }
   }
@@ -120,6 +135,12 @@ class LlmClient {
   // ── Anthropic 格式（保留兼容） ──
 
   private async chatAnthropic(messages: LlmMessage[], tools?: ToolDefinition[]): Promise<LlmResponse> {
+    logger.debug('LLM 请求开始 (Anthropic)', {
+      model: this.model,
+      provider: this.provider,
+      messageCount: messages.length
+    })
+
     const anthropicTools = tools?.map(t => ({
       name: t.name,
       description: t.description,
@@ -158,6 +179,7 @@ class LlmClient {
 
     if (!response.ok) {
       const errorText = await response.text()
+      logger.error('LLM 请求失败 (Anthropic)', { status: response.status, body: errorText })
       throw new Error(`LLM API error: ${response.status} ${errorText}`)
     }
 
@@ -175,9 +197,13 @@ class LlmClient {
       input: (t.input as Record<string, unknown>) || {}
     }))
 
+    const contentLength = textBlock?.text?.length || 0
+    const finishReason = toolCalls.length > 0 ? 'tool_use' : 'stop'
+    logger.info('LLM 响应成功 (Anthropic)', { finishReason, contentLength })
+
     return {
       content: textBlock?.text || '',
-      finishReason: toolCalls.length > 0 ? 'tool_use' : 'stop',
+      finishReason,
       toolCalls
     }
   }

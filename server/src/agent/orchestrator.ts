@@ -2,7 +2,10 @@ import { Memory } from './memory'
 import { runReActLoop } from './react-loop'
 import { getRolePrompt } from './roles/index'
 import { toolRegistry } from './tool-registry'
+import { createLogger } from '../logger'
 import type { AgentRole, ReportContent, AgentResult } from '../../../shared/types'
+
+const logger = createLogger('orchestrator')
 
 interface ReviewEvent {
   type: string
@@ -21,6 +24,7 @@ async function runReviewTask(
   language: string,
   onEvent: (event: ReviewEvent) => void
 ): Promise<ReportContent> {
+  logger.info('审查任务开始', { taskId, language, codeLength: code.length })
   onEvent({ type: 'orchestrator_start', message: '正在分析代码结构...' })
 
   const orchRole = getRolePrompt('orchestrator')
@@ -109,8 +113,10 @@ async function runReviewTask(
 
       reviewerResults[role] = parsed
       onEvent({ type: 'agent_done', agentId: reviewerId, role, message: `${role} 审查完成` })
+      logger.info('审查员完成', { role, taskId })
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error'
+      logger.error('审查员执行失败', { role, taskId, error: errorMsg })
       onEvent({ type: 'error', agentId: reviewerId, role, message: errorMsg })
       reviewerResults[role] = { issues: [], score: 0 }
     }

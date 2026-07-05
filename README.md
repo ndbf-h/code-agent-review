@@ -24,6 +24,19 @@ npm run dev
 前端地址：http://localhost:5173
 后端地址：http://localhost:3001
 
+## 日志系统
+
+使用内置结构化日志模块 `server/src/logger.ts`，支持四个日志等级：
+
+| 等级 | 说明 |
+|------|------|
+| DEBUG | 调试信息，如 LLM 请求详情 |
+| INFO | 一般信息，如任务开始/完成、LLM 响应成功 |
+| WARN | 警告，如 LLM 返回空 choices |
+| ERROR | 错误，如 LLM 请求失败 |
+
+通过环境变量 `LOG_LEVEL` 控制输出级别（默认 `DEBUG`），例如 `LOG_LEVEL=INFO` 将只输出 INFO 及以上级别。
+
 ## 项目结构
 
 ```
@@ -33,7 +46,7 @@ npm run dev
 │   ├── stores/        review.ts（Pinia 状态管理）
 │   └── types/         前端类型定义
 ├── server/src/
-│   ├── errors.ts      统一错误体系（AppError 层次结构）
+│   ├── logger.ts      结构化日志系统（支持 LOG_LEVEL 环境变量）
 │   ├── agent/         核心 Agent 引擎
 │   │   ├── roles/     5 个 Agent 角色的系统提示词
 │   │   ├── react-loop.ts       ReAct 推理循环
