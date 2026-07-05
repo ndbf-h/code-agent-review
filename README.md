@@ -33,6 +33,7 @@ npm run dev
 │   ├── stores/        review.ts（Pinia 状态管理）
 │   └── types/         前端类型定义
 ├── server/src/
+│   ├── errors.ts      统一错误体系（AppError 层次结构）
 │   ├── agent/         核心 Agent 引擎
 │   │   ├── roles/     5 个 Agent 角色的系统提示词
 │   │   ├── react-loop.ts       ReAct 推理循环
