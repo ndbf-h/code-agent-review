@@ -1,5 +1,5 @@
 import { useReviewStore } from '../stores/review'
-import type { ChatMessage } from '../types/index'
+import type { ChatMessage, AgentRole } from '../types/index'
 
 export function useSSE() {
   const store = useReviewStore()
@@ -23,35 +23,32 @@ export function useSSE() {
 
       agent_start: (data) => {
         store.setStatus('reviewing')
-        store.addMessage({
-          role: (data.role as ChatMessage['role']) || 'system',
-          content: (data.message as string) || '开始审查...',
-          type: 'agent_thought'
+        const role = (data.role as AgentRole) || 'security'
+        store.upsertAgentSlot(role, {
+          status: 'working',
+          latestMessage: (data.message as string) || '开始审查...'
         })
       },
 
       agent_thought: (data) => {
-        store.addMessage({
-          role: (data.role as ChatMessage['role']) || 'system',
-          content: (data.message as string) || '思考中...',
-          type: 'agent_thought'
+        const role = (data.role as AgentRole) || 'security'
+        store.upsertAgentSlot(role, {
+          latestMessage: (data.message as string) || '思考中...'
         })
       },
 
       tool_call: (data) => {
-        store.addMessage({
-          role: (data.role as ChatMessage['role']) || 'system',
-          content: `正在调用工具 ${data.toolName}...`,
-          type: 'tool_call',
-          toolName: data.toolName as string
+        const role = (data.role as AgentRole) || 'security'
+        store.upsertAgentSlot(role, {
+          latestMessage: `工具：${data.toolName || '...'}`
         })
       },
 
       agent_done: (data) => {
-        store.addMessage({
-          role: (data.role as ChatMessage['role']) || 'system',
-          content: (data.message as string) || '审查完成',
-          type: 'final_answer'
+        const role = (data.role as AgentRole) || 'security'
+        store.upsertAgentSlot(role, {
+          status: 'done',
+          latestMessage: (data.message as string) || '审查完成'
         })
       },
 

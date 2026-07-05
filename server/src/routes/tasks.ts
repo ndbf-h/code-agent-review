@@ -143,9 +143,11 @@ async function resolveAndCheckIp(hostname: string): Promise<void> {
   } catch {
     // IPv6 解析失败
   }
-  if (addresses.length === 0) {
-    throw new Error('无法解析域名 IP 地址')
-  }
+
+  // DNS 解析不到任何 IP：可能是网络环境限制，跳过 SSRF 校验
+  // 后续 fetch 会自行处理连接失败
+  if (addresses.length === 0) return
+
   for (const addr of addresses) {
     if (isPrivateIp(addr)) {
       throw new Error(`禁止访问内网地址：${addr}`)

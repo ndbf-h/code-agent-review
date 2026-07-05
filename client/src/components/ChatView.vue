@@ -4,6 +4,7 @@ import { useChat } from '../composables/useChat'
 import CodeInput from './CodeInput.vue'
 import ChatMessage from './ChatMessage.vue'
 import ReviewReport from './ReviewReport.vue'
+import AgentProgressPanel from './AgentProgressPanel.vue'
 
 const store = useReviewStore()
 const { startReview, retry } = useChat()
@@ -60,6 +61,8 @@ function runExample(index: number) {
 <template>
   <div class="chat-view">
     <div class="message-list" v-if="store.messages.length > 0 || store.loading">
+      <AgentProgressPanel v-if="store.agentSlots.length > 0" />
+
       <template v-for="msg in store.messages" :key="msg.id">
         <ChatMessage :message="msg" :on-retry="msg.role === 'system' && msg.content.startsWith('错误：') ? onRetry : undefined" />
         <ReviewReport v-if="msg.type === 'report' && msg.report" :report="msg.report" />

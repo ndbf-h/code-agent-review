@@ -1,3 +1,38 @@
+/* ── CSS Variables ── */
+:root {
+  --color-bg: #f8f9fc;
+  --color-surface: #ffffff;
+  --color-border: #e8ecf1;
+  --color-border-light: #f0f2f5;
+  --color-text: #1a1d26;
+  --color-text-secondary: #6b7280;
+  --color-text-muted: #9ca3af;
+
+  --color-primary: #3b5cf6;
+  --color-primary-hover: #4f6ef7;
+  --color-primary-light: #eef1fe;
+  --color-accent: #8b5cf6;
+  --color-accent-light: #f3f0ff;
+
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
+  --shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.1);
+
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+}
+
+/* ── Reset ── */
 * {
   margin: 0;
   padding: 0;
@@ -5,15 +40,45 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  background: #f5f5f5;
-  color: #303133;
+  font-family: var(--font-sans);
+  background: var(--color-bg);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.6;
 }
 
 #app {
-  max-width: 800px;
-  margin: 0 auto;
   min-height: 100vh;
-  background: #ffffff;
-  box-shadow: 0 0 20px rgba(0, 0, 0, 0.05);
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* ── Element Plus 主题覆盖 ── */
+:root {
+  --el-color-primary: var(--color-primary);
+  --el-color-primary-light-3: var(--color-primary-hover);
+  --el-color-primary-light-5: #7b93f9;
+  --el-color-primary-light-7: #b1c0fb;
+  --el-color-primary-light-8: #ccd6fd;
+  --el-color-primary-light-9: #e6eafe;
+  --el-border-radius-base: var(--radius-sm);
+  --el-font-family: var(--font-sans);
 }
