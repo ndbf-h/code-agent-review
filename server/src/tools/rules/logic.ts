@@ -20,7 +20,7 @@ export const logicRules: Rule[] = [
   },
   {
     name: 'unhandled-promise',
-    pattern: /\.then\s*\(\s*function|\.then\s*\(\s*\([^)]*\)\s*=>\s*\{/gi,
+    pattern: /\.then\s*\(\s*(?:function|\([^)]*\)\s*=>\s*\{)(?![^)]*\)\s*\.\s*catch\s*\()/gi,
     severity: 'warning',
     category: '未处理 Promise',
     message: 'Promise then 链可能缺少 .catch()',
@@ -36,7 +36,7 @@ export const logicRules: Rule[] = [
   },
   {
     name: 'array-index-without-check',
-    pattern: /(\w+)\[(\w+)\]/g,
+    pattern: /(\w+)\[(?!['"])(\w+)\]/g,
     severity: 'suggestion',
     category: '索引安全',
     message: (m) => `数组 "${m[1]}[${m[2]}]" 访问未做边界检查`,

@@ -173,6 +173,9 @@ const validateSyntax: Tool = {
         // 动态 require acorn（如果未安装则 fallback）
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const acorn = require('acorn')
+        if (!acorn || typeof acorn.parse !== 'function') {
+          return JSON.stringify({ valid: false, errors: [{ line: 1, message: 'acorn 解析器不可用，请安装 acorn 依赖' }] })
+        }
         const options = language === 'typescript' || language === 'tsx'
           ? { ecmaVersion: 'latest', sourceType: 'module', plugins: { typescript: true } as Record<string, boolean> }
           : { ecmaVersion: 'latest', sourceType: 'module' }

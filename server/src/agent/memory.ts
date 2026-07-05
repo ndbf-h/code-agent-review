@@ -1,5 +1,8 @@
 import type { LlmMessage } from './types'
 import { v4 as uuidv4 } from 'uuid'
+import { createLogger } from '../logger'
+
+const logger = createLogger('memory')
 
 const MAX_CONTEXT_CHARS = 20000
 
@@ -71,8 +74,9 @@ class Memory {
           type: msg.role === 'tool' ? 'tool_result' : 'agent_thought',
           createdAt: new Date().toISOString()
         })
-      } catch {
+      } catch (error) {
         // 持久化失败不阻断流程
+        logger.warn('Message persist failed', { error })
       }
     }
     this.persistedCount = this.messages.length

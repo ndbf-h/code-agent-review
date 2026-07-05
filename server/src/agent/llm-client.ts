@@ -100,7 +100,8 @@ class LlmClient {
    */
   async *chatStream(
     messages: LlmMessage[],
-    tools?: ToolDefinition[]
+    tools?: ToolDefinition[],
+    options?: ChatOptions
   ): AsyncGenerator<StreamChunk> {
     if (this.config.provider === 'anthropic') {
       // Anthropic 流式暂未实现，回退到非流式
@@ -115,7 +116,7 @@ class LlmClient {
       yield { type: 'done' }
       return
     }
-    yield* this.chatOpenAIStream(messages, tools)
+    yield* this.chatOpenAIStream(messages, tools, options)
   }
 
   /**
@@ -212,6 +213,7 @@ class LlmClient {
     }
 
     let lastError: Error | null = null
+    let lastResponseText = ''
 
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
@@ -221,8 +223,10 @@ class LlmClient {
           await sleep(delay)
         }
 
-        const response = await this.chat(augmentedMessages)
-        const jsonText = extractJson(response.content)
+        const response = await this.chat(augmentedMessages, undefined, { jsonMode: true })
+        const responseText = response.content
+        lastResponseText = responseText
+        const jsonText = extractJson(responseText)
 
         if (!jsonText) {
           throw new Error('响应内容为空，无法提取 JSON')
@@ -242,10 +246,13 @@ class LlmClient {
           error: lastError.message
         })
 
-        // 追加修正提示，帮助 LLM 下次输出正确 JSON
+        // 追加修正提示，包含上次 LLM 返回的原始文本，帮助 LLM 理解问题
+        const previousSnippet = lastResponseText
+          ? `\n上次返回的内容（截取前500字符）：\n\`\`\`\n${lastResponseText.slice(0, 500)}${lastResponseText.length > 500 ? '\n...（已截断）' : ''}\n\`\`\``
+          : ''
         augmentedMessages.push({
           role: 'user',
-          content: `上次返回的内容无法解析为有效的 JSON。错误信息: ${lastError.message}。请确保只返回纯 JSON 格式，不要包含任何额外的文字或 markdown 标记。`
+          content: `上次返回的内容无法解析为有效的 JSON。错误信息: ${lastError.message}。${previousSnippet}请确保只返回纯 JSON 格式，不要包含任何额外的文字或 markdown 标记。`
         })
       }
     }
@@ -280,6 +287,42 @@ class LlmClient {
   }
 
   // ═══════════════════════════════════════════════════
+  // 共享映射辅助方法
+  // ═══════════════════════════════════════════════════
+
+  /** 将 ToolDefinition 数组映射为 OpenAI 兼容的 tools 格式 */
+  private mapToolsToOpenAI(tools?: ToolDefinition[]) {
+    return tools?.map(t => ({
+      type: 'function' as const,
+      function: {
+        name: t.name,
+        description: t.description,
+        parameters: {
+          type: 'object' as const,
+          properties: t.parameters,
+          required: Object.keys(t.parameters)
+        }
+      }
+    }))
+  }
+
+  /** 将 LlmMessage 数组映射为 OpenAI 兼容的 messages 格式 */
+  private mapMessagesToOpenAI(messages: LlmMessage[]) {
+    return messages.map(m => {
+      const msg: Record<string, unknown> = {
+        role: m.role,
+        content: m.content || ''
+      }
+      if (m.toolCallId) msg.tool_call_id = m.toolCallId
+      if (m.name) msg.name = m.name
+      if (m.toolCalls && m.toolCalls.length > 0) {
+        msg.tool_calls = m.toolCalls
+      }
+      return msg
+    })
+  }
+
+  // ═══════════════════════════════════════════════════
   // OpenAI / DeepSeek 兼容格式
   // ═══════════════════════════════════════════════════
 
@@ -294,34 +337,12 @@ class LlmClient {
       messageCount: messages.length
     })
 
-    const openaiTools = tools?.map(t => ({
-      type: 'function' as const,
-      function: {
-        name: t.name,
-        description: t.description,
-        parameters: {
-          type: 'object' as const,
-          properties: t.parameters,
-          required: Object.keys(t.parameters)
-        }
-      }
-    }))
+    const openaiTools = this.mapToolsToOpenAI(tools)
 
     const body: Record<string, unknown> = {
       model: this.config.model,
       max_tokens: options?.maxTokens ?? 4096,
-      messages: messages.map(m => {
-        const msg: Record<string, unknown> = {
-          role: m.role,
-          content: m.content || ''
-        }
-        if (m.toolCallId) msg.tool_call_id = m.toolCallId
-        if (m.name) msg.name = m.name
-        if (m.toolCalls && m.toolCalls.length > 0) {
-          msg.tool_calls = m.toolCalls
-        }
-        return msg
-      })
+      messages: this.mapMessagesToOpenAI(messages)
     }
 
     if (options?.temperature !== undefined) {
@@ -329,6 +350,9 @@ class LlmClient {
     }
     if (openaiTools && openaiTools.length > 0) {
       body.tools = openaiTools
+    }
+    if (options?.jsonMode) {
+      body.response_format = { type: 'json_object' }
     }
 
     let response: Response
@@ -411,7 +435,8 @@ class LlmClient {
    */
   private async *chatOpenAIStream(
     messages: LlmMessage[],
-    tools?: ToolDefinition[]
+    tools?: ToolDefinition[],
+    options?: ChatOptions
   ): AsyncGenerator<StreamChunk> {
     logger.debug('LLM 流式请求开始', {
       model: this.config.model,
@@ -419,37 +444,18 @@ class LlmClient {
       messageCount: messages.length
     })
 
-    const openaiTools = tools?.map(t => ({
-      type: 'function' as const,
-      function: {
-        name: t.name,
-        description: t.description,
-        parameters: {
-          type: 'object' as const,
-          properties: t.parameters,
-          required: Object.keys(t.parameters)
-        }
-      }
-    }))
+    const openaiTools = this.mapToolsToOpenAI(tools)
 
     const body: Record<string, unknown> = {
       model: this.config.model,
-      max_tokens: 4096,
+      max_tokens: options?.maxTokens ?? 4096,
       stream: true,
-      messages: messages.map(m => {
-        const msg: Record<string, unknown> = {
-          role: m.role,
-          content: m.content || ''
-        }
-        if (m.toolCallId) msg.tool_call_id = m.toolCallId
-        if (m.name) msg.name = m.name
-        if (m.toolCalls && m.toolCalls.length > 0) {
-          msg.tool_calls = m.toolCalls
-        }
-        return msg
-      })
+      messages: this.mapMessagesToOpenAI(messages)
     }
 
+    if (options?.temperature !== undefined) {
+      body.temperature = options.temperature
+    }
     if (openaiTools && openaiTools.length > 0) {
       body.tools = openaiTools
     }
@@ -479,11 +485,6 @@ class LlmClient {
       )
     }
 
-    const reader = response.body?.getReader()
-    if (!reader) {
-      throw new LlmError('无法获取流式响应读取器')
-    }
-
     const decoder = new TextDecoder()
     let buffer = ''
 
@@ -493,7 +494,15 @@ class LlmClient {
       { id: string; name: string; args: string }
     >()
 
+    let doneYielded = false
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
+
     try {
+      reader = response.body?.getReader()
+      if (!reader) {
+        throw new LlmError('无法获取流式响应读取器')
+      }
+
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
@@ -530,6 +539,7 @@ class LlmClient {
               }
             }
             yield { type: 'done' }
+            doneYielded = true
             return
           }
 
@@ -573,8 +583,9 @@ class LlmClient {
             }
 
             // finish_reason 为 stop 且没有 tool_calls 时表示结束
-            if (choice.finish_reason === 'stop' && !delta?.tool_calls) {
+            if (choice.finish_reason === 'stop' && !delta?.tool_calls && !doneYielded) {
               yield { type: 'done' }
+              doneYielded = true
             }
           } catch {
             // 跳过无法解析的事件行
@@ -584,10 +595,12 @@ class LlmClient {
       }
 
       // 流读取完毕但未收到 [DONE]，发送结束信号
-      logger.debug('LLM 流式传输结束（未收到 [DONE]）')
-      yield { type: 'done' }
+      if (!doneYielded) {
+        logger.debug('LLM 流式传输结束（未收到 [DONE]）')
+        yield { type: 'done' }
+      }
     } finally {
-      reader.releaseLock()
+      reader?.releaseLock()
     }
   }
 

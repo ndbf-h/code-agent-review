@@ -14,6 +14,8 @@ export interface Rule {
   suggestion: string
   /** 适用的语言列表，空数组表示所有语言 */
   languages?: string[]
+  /** 禁用标记：为 true 时规则不参与扫描（用于占位规则） */
+  disabled?: boolean
 }
 
 export interface RuleMatch {
@@ -32,6 +34,11 @@ export function scanCode(code: string, rules: Rule[], language?: string): RuleMa
   const matches: RuleMatch[] = []
 
   for (const rule of rules) {
+    // 禁用规则跳过
+    if (rule.disabled) {
+      continue
+    }
+
     // 语言过滤
     if (rule.languages && rule.languages.length > 0 && language && !rule.languages.includes(language)) {
       continue

@@ -53,6 +53,7 @@ interface LlmConfig {
   baseUrl: string
   model: string
   provider: string
+  maxRetries?: number
 }
 
 /** Chat 调用选项 */
@@ -60,6 +61,7 @@ interface ChatOptions {
   maxTokens?: number
   temperature?: number
   stream?: boolean
+  jsonMode?: boolean
 }
 
 export type {

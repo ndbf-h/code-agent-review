@@ -42,10 +42,14 @@ export function createLogger(name: string) {
     if (LOG_LEVEL_RANK[level] < LOG_LEVEL_RANK[currentLevel]) return
     const timestamp = getTimestamp()
     const prefix = `${timestamp} [${level}] [${name}]`
+
+    const consoleMethod: 'log' | 'warn' | 'error' =
+      level === 'ERROR' ? 'error' : level === 'WARN' ? 'warn' : 'log'
+
     if (args.length > 0) {
-      console.log(`${prefix} ${message}`, ...args)
+      console[consoleMethod](`${prefix} ${message}`, ...args)
     } else {
-      console.log(`${prefix} ${message}`)
+      console[consoleMethod](`${prefix} ${message}`)
     }
   }
 

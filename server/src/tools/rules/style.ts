@@ -4,7 +4,7 @@ import type { Rule } from './types'
 export const styleRules: Rule[] = [
   {
     name: 'magic-number',
-    pattern: /(?<![a-zA-Z0-9_".'])(\d{2,})(?![a-zA-Z0-9_"])/g,
+    pattern: /(?<![a-zA-Z0-9_"'.\[\]])(\d{2,})(?![a-zA-Z0-9_"\[\]])/g,
     severity: 'suggestion',
     category: '魔法数字',
     message: (m) => `发现魔法数字 ${m[1]}，缺少语义说明`,
@@ -16,7 +16,8 @@ export const styleRules: Rule[] = [
     severity: 'suggestion',
     category: '函数过长',
     message: '函数超过 50 行，建议拆分',
-    suggestion: '将函数拆分为多个职责单一的更小函数'
+    suggestion: '将函数拆分为多个职责单一的更小函数',
+    disabled: true
   },
   {
     name: 'missing-comment-export',

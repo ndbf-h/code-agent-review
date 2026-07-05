@@ -43,16 +43,15 @@ tasksRouter.get('/:id', async (req: Request, res: Response, next: NextFunction) 
 tasksRouter.get('/:id/stream', async (req: Request, res: Response) => {
   const taskId = req.params.id
 
-  // 并发控制：检查活跃任务数
+  // 并发控制：原子地检查并获取任务槽位（同步操作无await间隙，利用事件循环单线程特性保证原子性）
   const locals = req.app.locals as { activeTaskCount: number; maxConcurrentTasks: number }
-  if (locals.activeTaskCount >= locals.maxConcurrentTasks) {
+  if (!tryAcquireSlot(locals)) {
     res.status(503).json({
       error: `当前审查任务已满（${locals.maxConcurrentTasks} 个），请等待...`,
       code: 'CONCURRENCY_LIMITED'
     })
     return
   }
-  locals.activeTaskCount++
 
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
@@ -106,6 +105,15 @@ tasksRouter.get('/:id/stream', async (req: Request, res: Response) => {
 })
 
 // POST /api/tasks/fetch-url — 抓取 URL 代码内容
+
+/** 原子地尝试获取并发任务槽位，成功返回 true 并递增计数，失败返回 false */
+function tryAcquireSlot(locals: { activeTaskCount: number; maxConcurrentTasks: number }): boolean {
+  if (locals.activeTaskCount >= locals.maxConcurrentTasks) {
+    return false
+  }
+  locals.activeTaskCount++
+  return true
+}
 
 const MAX_REDIRECTS = 3
 

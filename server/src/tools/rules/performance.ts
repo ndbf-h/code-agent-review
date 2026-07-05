@@ -20,7 +20,7 @@ export const performanceRules: Rule[] = [
   },
   {
     name: 'sync-sleep',
-    pattern: /setTimeout\s*\(\s*function|while\s*\(\s*Date\.now|sleep\s*\(\s*\d+\s*\)/gi,
+    pattern: /while\s*\(\s*Date\.now|sleep\s*\(\s*\d+\s*\)/gi,
     severity: 'warning',
     category: '同步阻塞',
     message: '使用了阻塞式等待/轮询模式',
