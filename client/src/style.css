@@ -1,7 +1,9 @@
-/* ── CSS Variables ── */
+/* ── 设计令牌（浅色） ── */
 :root {
   --color-bg: #f8f9fc;
   --color-surface: #ffffff;
+  --color-surface-2: #fafbfc;
+  --color-surface-hover: #f8f9fc;
   --color-border: #e8ecf1;
   --color-border-light: #f0f2f5;
   --color-text: #1a1d26;
@@ -15,8 +17,41 @@
   --color-accent-light: #f3f0ff;
 
   --color-success: #10b981;
+  --color-success-bg: #d1fae5;
+  --color-success-text: #047857;
   --color-warning: #f59e0b;
+  --color-warning-bg: #fef3c7;
+  --color-warning-text: #b45309;
   --color-danger: #ef4444;
+  --color-danger-bg: #fee2e2;
+  --color-danger-text: #b91c1c;
+  --color-info: #2563eb;
+  --color-info-bg: #dbeafe;
+  --color-info-text: #1d4ed8;
+
+  /* 辅助组件色 */
+  --color-nav-bg: rgba(255, 255, 255, 0.78);
+  --color-nav-border: rgba(255, 255, 255, 0.58);
+  --color-hover-bg: rgba(0, 0, 0, 0.04);
+  --color-code-bg: #f0f2f5;
+  --color-pre-bg: #f8f9fc;
+  --color-table-head-bg: #f8f9fc;
+  --color-segmented-bg: #eef1f6;
+  --color-skeleton-from: #eef1f6;
+  --color-skeleton-to: #f7f8fb;
+  --color-diff-remove-bg: #fef2f2;
+  --color-diff-add-bg: #f0fdf4;
+  --color-bg-glow-primary: rgba(59, 92, 246, 0.06);
+  --color-bg-glow-accent: rgba(139, 92, 246, 0.04);
+
+  /* 助手面板（紫色系） */
+  --color-purple-bg: #faf9ff;
+  --color-purple-border: #ddd6fe;
+  --color-purple-border-strong: #d8d4fe;
+  --color-purple-text: #4c1d95;
+  --color-purple-text-secondary: #6d28d9;
+  --color-purple-text-muted: #6b7280;
+  --color-purple-chip-bg: #ede9fe;
 
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -28,8 +63,67 @@
   --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
   --shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.1);
 
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  --font-sans: 'Inter', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', 'Microsoft YaHei', monospace;
+}
+
+/* ── 设计令牌（暗色） ── */
+html.dark {
+  --color-bg: #0f1117;
+  --color-surface: #171a21;
+  --color-surface-2: #1d2129;
+  --color-surface-hover: #22262f;
+  --color-border: #2a2f3a;
+  --color-border-light: #232833;
+  --color-text: #e6e8ee;
+  --color-text-secondary: #a7adb8;
+  --color-text-muted: #7d8491;
+
+  --color-primary: #5b77f8;
+  --color-primary-hover: #6d86f9;
+  --color-primary-light: rgba(59, 92, 246, 0.16);
+  --color-accent: #9d74f7;
+  --color-accent-light: rgba(139, 92, 246, 0.16);
+
+  --color-success: #34d399;
+  --color-success-bg: rgba(16, 185, 129, 0.16);
+  --color-success-text: #34d399;
+  --color-warning: #fbbf24;
+  --color-warning-bg: rgba(245, 158, 11, 0.16);
+  --color-warning-text: #fbbf24;
+  --color-danger: #f87171;
+  --color-danger-bg: rgba(239, 68, 68, 0.16);
+  --color-danger-text: #f87171;
+  --color-info: #60a5fa;
+  --color-info-bg: rgba(59, 130, 246, 0.16);
+  --color-info-text: #60a5fa;
+
+  --color-nav-bg: rgba(23, 26, 33, 0.78);
+  --color-nav-border: rgba(255, 255, 255, 0.08);
+  --color-hover-bg: rgba(255, 255, 255, 0.06);
+  --color-code-bg: #232833;
+  --color-pre-bg: #14171d;
+  --color-table-head-bg: #1d2129;
+  --color-segmented-bg: #232833;
+  --color-skeleton-from: #232833;
+  --color-skeleton-to: #2a2f3a;
+  --color-diff-remove-bg: rgba(239, 68, 68, 0.14);
+  --color-diff-add-bg: rgba(16, 185, 129, 0.14);
+  --color-bg-glow-primary: rgba(59, 92, 246, 0.1);
+  --color-bg-glow-accent: rgba(139, 92, 246, 0.07);
+
+  --color-purple-bg: #1b1826;
+  --color-purple-border: #383050;
+  --color-purple-border-strong: #453b5e;
+  --color-purple-text: #c4b5fd;
+  --color-purple-text-secondary: #a78bfa;
+  --color-purple-text-muted: #9ca3af;
+  --color-purple-chip-bg: rgba(139, 92, 246, 0.16);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.25);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.25);
+  --shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.55);
 }
 
 /* ── Reset ── */
@@ -46,6 +140,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   line-height: 1.6;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 #app {
@@ -71,6 +166,30 @@ body {
   background: #9ca3af;
 }
 
+html.dark ::-webkit-scrollbar-thumb {
+  background: #2a2f3a;
+}
+
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #4b5563;
+}
+
+/* ── 路由过渡 ── */
+.page-enter-active,
+.page-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.page-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
 /* ── Element Plus 主题覆盖 ── */
 :root {
   --el-color-primary: var(--color-primary);
@@ -78,7 +197,19 @@ body {
   --el-color-primary-light-5: #7b93f9;
   --el-color-primary-light-7: #b1c0fb;
   --el-color-primary-light-8: #ccd6fd;
-  --el-color-primary-light-9: #e6eafe;
+  --el-color-primary-light-9: var(--color-primary-light);
   --el-border-radius-base: var(--radius-sm);
   --el-font-family: var(--font-sans);
+}
+
+html.dark {
+  --el-bg-color: var(--color-surface);
+  --el-bg-color-overlay: var(--color-surface-2);
+  --el-fill-color-blank: var(--color-surface);
+  --el-border-color: var(--color-border);
+  --el-border-color-light: var(--color-border-light);
+  --el-border-color-lighter: var(--color-border-light);
+  --el-text-color-primary: var(--color-text);
+  --el-text-color-regular: var(--color-text-secondary);
+  --el-text-color-secondary: var(--color-text-muted);
 }

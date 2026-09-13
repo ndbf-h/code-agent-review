@@ -19,6 +19,7 @@ const AGENT_LABELS: Record<string, string> = {
 
 export const useReviewStore = defineStore('review', () => {
   const taskId = ref<string | null>(null)
+  const scopeId = ref<string | null>(null)
   const status = ref<TaskStatus>('pending')
   const messages = ref<ChatMessage[]>([])
   const loading = ref(false)
@@ -64,13 +65,18 @@ export const useReviewStore = defineStore('review', () => {
     taskId.value = id
   }
 
+  function setScopeId(id: string) {
+    scopeId.value = id
+  }
+
   function reset() {
     taskId.value = null
+    scopeId.value = null
     status.value = 'pending'
     messages.value = []
     loading.value = false
     agentSlots.value = []
   }
 
-  return { taskId, status, messages, loading, agentSlots, addMessage, upsertAgentSlot, appendToken, setStatus, setTaskId, reset }
+  return { taskId, scopeId, status, messages, loading, agentSlots, addMessage, upsertAgentSlot, appendToken, setStatus, setTaskId, setScopeId, reset }
 })

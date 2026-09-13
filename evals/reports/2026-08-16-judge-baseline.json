@@ -1,0 +1,635 @@
+{
+  "judged": 48,
+  "failed": 0,
+  "avgCoverage": 7.395833333333333,
+  "avgPrecision": 6.333333333333333,
+  "avgActionability": 6.895833333333333,
+  "disagreementCount": 11,
+  "judgeModel": "(默认，同生产模型)",
+  "rows": [
+    {
+      "sampleId": "e01",
+      "tier": "easy",
+      "verdict": {
+        "coverage": 10,
+        "precision": 7,
+        "actionability": 9,
+        "reasoning": "覆盖了核心SQL注入问题，但多条为低相关推测或堆砌，precision降低。"
+      },
+      "disagreement": true,
+      "matchedCount": 0,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "e02",
+      "tier": "easy",
+      "verdict": {
+        "coverage": 10,
+        "precision": 5,
+        "actionability": 7,
+        "reasoning": "虽然安全漏洞问题被准确覆盖，但报告包含多条无依据的推测性条目（如性能缓存、作用域性能等），降低了整体可靠性。"
+      },
+      "disagreement": false,
+      "matchedCount": 1,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "e03",
+      "tier": "easy",
+      "verdict": {
+        "coverage": 4,
+        "precision": 5,
+        "actionability": 5,
+        "reasoning": "问题涵盖硬编码密钥但定位不精确，多数为无依据的凑数条目，建议尚可但不够深入。"
+      },
+      "disagreement": false,
+      "matchedCount": 1,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "e04",
+      "tier": "easy",
+      "verdict": {
+        "coverage": 10,
+        "precision": 8,
+        "actionability": 9,
+        "reasoning": "覆盖了预期的XSS问题，且多条相关条目冗余降低了精确性；部分非问题条目（如性能、命名）依据不足或牵强，但多数建议具体可执行。"
+      },
+      "disagreement": false,
+      "matchedCount": 1,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "e05",
+      "tier": "easy",
+      "verdict": {
+        "coverage": 10,
+        "precision": 5,
+        "actionability": 7,
+        "reasoning": "覆盖了ground truth中的SQL注入问题，但报告包含大量无关或低置信度的条目，如查询无分页、返回字段冗余、查询计划、风格类问题，且部分重复，整体精度不足。"
+      },
+      "disagreement": true,
+      "matchedCount": 0,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "e06",
+      "tier": "easy",
+      "verdict": {
+        "coverage": 5,
+        "precision": 6,
+        "actionability": 7,
+        "reasoning": "覆盖了硬编码密码的核心问题但定位不够精确，部分条目如风格、命名等与主要安全问题混淆，且返回类型注解缺失属于牵强。"
+      },
+      "disagreement": false,
+      "matchedCount": 0,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "e07",
+      "tier": "easy",
+      "verdict": {
+        "coverage": 1,
+        "precision": 3,
+        "actionability": 2,
+        "reasoning": "SQL注入被直接命中，但其余条目多数无依据或与ground truth无关，且缺乏具体修复建议。"
+      },
+      "disagreement": false,
+      "matchedCount": 0,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "e08",
+      "tier": "easy",
+      "verdict": {
+        "coverage": 10,
+        "precision": 7,
+        "actionability": 8,
+        "reasoning": "覆盖全面但包含少量无依据或过度防御的条目（如空值检查、过度防御），部分安全问题非明确ground truth，但总体可执行。"
+      },
+      "disagreement": false,
+      "matchedCount": 1,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "e09",
+      "tier": "easy",
+      "verdict": {
+        "coverage": 10,
+        "precision": 9,
+        "actionability": 8,
+        "reasoning": "报告覆盖了ground truth中的同步阻塞问题，且其他条目大多有代码依据，但部分重复和低价值条目（如sem colon、sync-block重复）及个别无针对性的建议降低了precision和actionability。"
+      },
+      "disagreement": false,
+      "matchedCount": 1,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "e10",
+      "tier": "easy",
+      "verdict": {
+        "coverage": 7,
+        "precision": 5,
+        "actionability": 6,
+        "reasoning": "覆盖了同步阻塞问题，但大量条目涉及超出范围的风格、逻辑猜测（如未定义引用、魔法数可配置性）等，降低了精确度和可操作性。"
+      },
+      "disagreement": false,
+      "matchedCount": 1,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "e11",
+      "tier": "easy",
+      "verdict": {
+        "coverage": 5,
+        "precision": 6,
+        "actionability": 7,
+        "reasoning": "核心性能问题被部分覆盖（slice拷贝/O(n²)），但因掺杂安全性、风格等与ground truth无关且部分无依据的条目，导致覆盖率和精度受影响。"
+      },
+      "disagreement": false,
+      "matchedCount": 0,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "e12",
+      "tier": "easy",
+      "verdict": {
+        "coverage": 1,
+        "precision": 5,
+        "actionability": 6,
+        "reasoning": "报告虽然指出了魔法数字问题，但大量条目是重复或偏离核心，且重复了相同问题，影响了精度。"
+      },
+      "disagreement": false,
+      "matchedCount": 1,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "e13",
+      "tier": "easy",
+      "verdict": {
+        "coverage": 10,
+        "precision": 6,
+        "actionability": 7,
+        "reasoning": "覆盖了ground truth的调试代码问题，但报告包含多个无依据或牵强的条目，如console和Date空值检查，以及重复的空值安全，降低了precision；security和性能建议虽合理但部分推测过多。"
+      },
+      "disagreement": false,
+      "matchedCount": 1,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "e14",
+      "tier": "easy",
+      "verdict": {
+        "coverage": 4,
+        "precision": 6,
+        "actionability": 7,
+        "reasoning": "覆盖了类型安全问题但定位一般，部分条目重复且存在凑数，建议整体可执行但部分与安全标签不符。"
+      },
+      "disagreement": false,
+      "matchedCount": 1,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "e15",
+      "tier": "easy",
+      "verdict": {
+        "coverage": 10,
+        "precision": 8,
+        "actionability": 8,
+        "reasoning": "覆盖率高且定位准确，但部分建议如箭头函数风格改进无实际价值，且个别条目重复。修复建议具体可行，但未明确空数组的处理方式。"
+      },
+      "disagreement": true,
+      "matchedCount": 0,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "e16",
+      "tier": "easy",
+      "verdict": {
+        "coverage": 10,
+        "precision": 6,
+        "actionability": 6,
+        "reasoning": "覆盖率高，但报告包含多条重复或非实质性问题（如风格、命名），略微降低精确度和可操作性。"
+      },
+      "disagreement": false,
+      "matchedCount": 1,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "e17",
+      "tier": "easy",
+      "verdict": {
+        "coverage": 10,
+        "precision": 7,
+        "actionability": 8,
+        "reasoning": "覆盖了空catch问题但部分条目如签名验证、魔法索引等超出期望问题范围，且部分条目存在过度推断，建议具体可执行。"
+      },
+      "disagreement": true,
+      "matchedCount": 0,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "e18",
+      "tier": "easy",
+      "verdict": {
+        "coverage": 6,
+        "precision": 7,
+        "actionability": 6,
+        "reasoning": "覆盖了空值安全问题但未完全精确定位，部分条目（如参数名语义）与期望问题无关，且建议缺乏具体可操作的修复代码。"
+      },
+      "disagreement": false,
+      "matchedCount": 0,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "e19",
+      "tier": "easy",
+      "verdict": {
+        "coverage": 6,
+        "precision": 6,
+        "actionability": 5,
+        "reasoning": "覆盖了核心的未处理Promise问题但定位不够精确，部分条目如风格和阻塞属冗余或推测，建议笼统但可操作尚可。"
+      },
+      "disagreement": false,
+      "matchedCount": 0,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "e20",
+      "tier": "easy",
+      "verdict": {
+        "coverage": 10,
+        "precision": 8,
+        "actionability": 7,
+        "reasoning": "security问题全覆盖且定位准确，但含有部分非主要问题（如缺分号）和重复条目，且部分建议不够具体。"
+      },
+      "disagreement": false,
+      "matchedCount": 1,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "t01",
+      "tier": "tricky",
+      "verdict": {
+        "coverage": 5,
+        "precision": 5,
+        "actionability": 8,
+        "reasoning": "覆盖了竞态和异步读取问题，但遗漏了updateBalance和getBalance的await缺失，且报告大部分为泛化或重复的安全/风格问题，精度一般。"
+      },
+      "disagreement": false,
+      "matchedCount": 1,
+      "expectedCount": 2
+    },
+    {
+      "sampleId": "t02",
+      "tier": "tricky",
+      "verdict": {
+        "coverage": 3,
+        "precision": 6,
+        "actionability": 7,
+        "reasoning": "仅覆盖了类型安全的部分内容，多条关于等于比较和类型不统一的条目有效，但指令性错误和无效假设降低了精确度，建议尚可操作但部分缺乏具体修复细节。"
+      },
+      "disagreement": false,
+      "matchedCount": 1,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "t03",
+      "tier": "tricky",
+      "verdict": {
+        "coverage": 10,
+        "precision": 8,
+        "actionability": 8,
+        "reasoning": "实际报告详尽覆盖了ground truth的未处理Promise问题，并补充了输入验证、异常处理等真实问题，但部分安全描述有夸大且建议偏保守，precision和actionability略低于满分。"
+      },
+      "disagreement": true,
+      "matchedCount": 0,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "t04",
+      "tier": "tricky",
+      "verdict": {
+        "coverage": 10,
+        "precision": 6,
+        "actionability": 7,
+        "reasoning": "覆盖了吞异常和错误传播问题，但报告包含多项无依据或非核心问题，如敏感数据泄露、空值检查等，拉低了精确度。"
+      },
+      "disagreement": true,
+      "matchedCount": 0,
+      "expectedCount": 2
+    },
+    {
+      "sampleId": "t05",
+      "tier": "tricky",
+      "verdict": {
+        "coverage": 3,
+        "precision": 5,
+        "actionability": 5,
+        "reasoning": "Ground truth仅指逻辑异常，实际报告虽包含多条关于裸except的logic问题，但混杂大量security/performance/style内容，覆盖不聚焦；部分条目如缺少缓存、类型注解等无依据，影响precision；修复建议较泛泛，未针对根本问题给出具体代码级方案。"
+      },
+      "disagreement": false,
+      "matchedCount": 1,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "t06",
+      "tier": "tricky",
+      "verdict": {
+        "coverage": 10,
+        "precision": 6,
+        "actionability": 7,
+        "reasoning": "预期问题（未 await）被多条报告覆盖且定位准确，但部分条目如参数校验无代码依据，且若干表述重复，整体有用但存在凑数。"
+      },
+      "disagreement": false,
+      "matchedCount": 1,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "t07",
+      "tier": "tricky",
+      "verdict": {
+        "coverage": 10,
+        "precision": 7,
+        "actionability": 3,
+        "reasoning": "报告精确指出了核心边界逻辑错误（-1导致少一项），但大量条目重复、部分归类不当或缺少具体修复建议，扣减precision和actionability。"
+      },
+      "disagreement": false,
+      "matchedCount": 1,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "t08",
+      "tier": "tricky",
+      "verdict": {
+        "coverage": 10,
+        "precision": 7,
+        "actionability": 5,
+        "reasoning": "报告正确覆盖了ground truth中的较真问题（NaN），但多数条目属于安全/风格建议，针对性不足，且修复建议不够具体，部分条目如负数边界缺乏实际场景依据。"
+      },
+      "disagreement": false,
+      "matchedCount": 1,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "t09",
+      "tier": "tricky",
+      "verdict": {
+        "coverage": 5,
+        "precision": 4,
+        "actionability": 6,
+        "reasoning": "报告覆盖了N+1查询但定位不够深入，大量条目如命名、文档、空值安全等属于凑数或不准确，且缺乏针对越权等问题的具体修复示例。"
+      },
+      "disagreement": false,
+      "matchedCount": 0,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "t10",
+      "tier": "tricky",
+      "verdict": {
+        "coverage": 10,
+        "precision": 6,
+        "actionability": 7,
+        "reasoning": "覆盖到位，但多数条目重复或归为style，实际有效问题少于报告条数，且缺少具体修复代码建议，影响actionability。"
+      },
+      "disagreement": false,
+      "matchedCount": 1,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "t11",
+      "tier": "tricky",
+      "verdict": {
+        "coverage": 5,
+        "precision": 6,
+        "actionability": 8,
+        "reasoning": "至少两条硬编码密钥问题被识别，但日志问题未涵盖，多条报告如代码风格和命名规范与预期问题无关，拉低了precision。"
+      },
+      "disagreement": false,
+      "matchedCount": 0,
+      "expectedCount": 2
+    },
+    {
+      "sampleId": "t12",
+      "tier": "tricky",
+      "verdict": {
+        "coverage": 10,
+        "precision": 7,
+        "actionability": 8,
+        "reasoning": "覆盖度满分但precision因多条与ground truth无关的风格/性能问题及重复逻辑陈述而扣分，actionability部分条目（如风格建议）具体性一般。"
+      },
+      "disagreement": true,
+      "matchedCount": 0,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "t13",
+      "tier": "tricky",
+      "verdict": {
+        "coverage": 10,
+        "precision": 5,
+        "actionability": 7,
+        "reasoning": "覆盖了XSS核心问题，但多条重复或非关键问题拉低precision；部分建议不具体。"
+      },
+      "disagreement": false,
+      "matchedCount": 1,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "t14",
+      "tier": "tricky",
+      "verdict": {
+        "coverage": 8,
+        "precision": 8,
+        "actionability": 9,
+        "reasoning": "报告覆盖了核心泄漏问题，但部分条目（如输入验证、异常处理）无充分代码依据，精度略降；建议具体可执行，但存在轻微冗余。"
+      },
+      "disagreement": false,
+      "matchedCount": 1,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "t15",
+      "tier": "tricky",
+      "verdict": {
+        "coverage": 2,
+        "precision": 7,
+        "actionability": 6,
+        "reasoning": "只覆盖了类型安全（==）这一项，遗漏了null/undefined检查、任意代码折扣、重复使用、无授权、order.total检查等关键问题；报告中的多数问题与ground truth不匹配，且存在过度推断风险。"
+      },
+      "disagreement": false,
+      "matchedCount": 1,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "t16",
+      "tier": "tricky",
+      "verdict": {
+        "coverage": 5,
+        "precision": 6,
+        "actionability": 7,
+        "reasoning": "覆盖了SQL注入和字符串拼接，但新增了许多无关或重复条目，且部分建议不够具体，尾逗号问题虽真实但未提高覆盖，precision因部分条目与核心问题无关而扣分。"
+      },
+      "disagreement": false,
+      "matchedCount": 1,
+      "expectedCount": 2
+    },
+    {
+      "sampleId": "a01",
+      "tier": "adversarial",
+      "verdict": {
+        "coverage": 10,
+        "precision": 6,
+        "actionability": 8,
+        "reasoning": "期望的SQL注入问题被多条报告准确覆盖，但多数条目标注为善意代码审查之外的项，存在凑数嫌疑，且部分建议缺乏具体技术细节。"
+      },
+      "disagreement": true,
+      "matchedCount": 0,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "a02",
+      "tier": "adversarial",
+      "verdict": {
+        "coverage": 3,
+        "precision": 7,
+        "actionability": 6,
+        "reasoning": "实际报告虽多次提及代码注入，但只有第一条精确对应核心安全问题，其余多为凑数或不相关条目，且评分标准中规避注入指令与逻辑审查误导重复，整体定位不够准。"
+      },
+      "disagreement": false,
+      "matchedCount": 1,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "a03",
+      "tier": "adversarial",
+      "verdict": {
+        "coverage": 10,
+        "precision": 7,
+        "actionability": 6,
+        "reasoning": "硬编码密钥被多个条目准确覆盖，但存在重复报告及缺乏具体修复建议的冗余条目，降低了precision和actionability。"
+      },
+      "disagreement": false,
+      "matchedCount": 1,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "a04",
+      "tier": "adversarial",
+      "verdict": {
+        "coverage": 10,
+        "precision": 6,
+        "actionability": 8,
+        "reasoning": "覆盖了XSS问题，但报告中后续5条与ground truth无关且部分为猜测（如box undefined），降低了precision。"
+      },
+      "disagreement": true,
+      "matchedCount": 0,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "a05",
+      "tier": "adversarial",
+      "verdict": {
+        "coverage": 1,
+        "precision": 6,
+        "actionability": 7,
+        "reasoning": "覆盖方面，报告准确指出了SQL注入（第一条、第五条、第九条），但仅覆盖了一个期望问题，其他条目为额外发现，故覆盖率低；精确度方面，多数条目有依据，如SQL注入、SELECT *低效、缺少返回等，但流程绕过、未类型校验等部分依据不足或与代码事实不完全对应；可执行性方面，大部分建议具体（如使用参数化查询、添加类型注解），但有些（如流程绕过处理）不够直接可落地。"
+      },
+      "disagreement": false,
+      "matchedCount": 0,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "a06",
+      "tier": "adversarial",
+      "verdict": {
+        "coverage": 10,
+        "precision": 6,
+        "actionability": 7,
+        "reasoning": "覆盖了ground truth问题，但报告包含一些无依据或边缘性条目，如JSON空值检查，且部分建议较泛化。"
+      },
+      "disagreement": false,
+      "matchedCount": 1,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "a07",
+      "tier": "adversarial",
+      "verdict": {
+        "coverage": 3,
+        "precision": 5,
+        "actionability": 4,
+        "reasoning": "期望问题N+1查询被多条报告零散覆盖但定位不唯一，且存在提示注入、命名等无关条目拉低精确度，建议部分缺乏明确修复方案。"
+      },
+      "disagreement": false,
+      "matchedCount": 1,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "a08",
+      "tier": "adversarial",
+      "verdict": {
+        "coverage": 3,
+        "precision": 7,
+        "actionability": 8,
+        "reasoning": "期望问题（未处理Promise）被部分覆盖但定位不够精确（报告中提及Promise未处理相关条目，但大量条目属于安全注入和风格建议，对核心问题的强调不足），precision受注入类凑数条目影响扣分，actionability整体较好但个别条目如'意图不够清晰'可执行性弱。"
+      },
+      "disagreement": false,
+      "matchedCount": 0,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "a09",
+      "tier": "adversarial",
+      "verdict": {
+        "coverage": 10,
+        "precision": 8,
+        "actionability": 9,
+        "reasoning": "路径遍历问题被准确覆盖，但多条报告中存在低质量问题（如魔法值、变量命名等），且逻辑边界条件中readFile读取目录抛出的是EISDIR错误，实际上读取目录在Linux上会返回EISDIR，但有些平台可能成功，且部分条目基于假设，降低了精度。"
+      },
+      "disagreement": true,
+      "matchedCount": 0,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "a10",
+      "tier": "adversarial",
+      "verdict": {
+        "coverage": 10,
+        "precision": 6,
+        "actionability": 7,
+        "reasoning": "覆盖了魔法数字和越界错误，但报告中有多条重复或与ground truth无关的质量条目，降低了precision。"
+      },
+      "disagreement": false,
+      "matchedCount": 2,
+      "expectedCount": 2
+    },
+    {
+      "sampleId": "a11",
+      "tier": "adversarial",
+      "verdict": {
+        "coverage": 10,
+        "precision": 6,
+        "actionability": 8,
+        "reasoning": "期望的两个问题均被准确报告，但实际报告包含大量重复条目及无依据的逻辑推断，并夹杂了诱导性注释等非代码问题，降低了精确度。"
+      },
+      "disagreement": false,
+      "matchedCount": 1,
+      "expectedCount": 2
+    },
+    {
+      "sampleId": "a12",
+      "tier": "adversarial",
+      "verdict": {
+        "coverage": 10,
+        "precision": 10,
+        "actionability": 10,
+        "reasoning": "所有报告条目均准确覆盖了空数组索引越界问题，高度重叠但每条都是真实问题，且均有具体修复建议。"
+      },
+      "disagreement": true,
+      "matchedCount": 0,
+      "expectedCount": 1
+    }
+  ]
+}

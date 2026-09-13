@@ -1,37 +1,38 @@
-import Database from 'better-sqlite3'
-import path from 'path'
-import fs from 'fs'
+import { Pool, type PoolClient } from 'pg'
 
-type DatabaseInstance = InstanceType<typeof Database>
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL || 'postgres://postgres:123456@localhost:5432/code_review',
+  max: 10,
+  idleTimeoutMillis: 30000
+})
 
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', '..', '.data', 'review.db')
-
-let db: DatabaseInstance | null = null
-
-function ensureDir(filePath: string): void {
-  const dir = path.dirname(filePath)
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true })
-  }
+export function getDb(): Pool {
+  return pool
 }
 
-export function getDb(): DatabaseInstance {
-  if (db) return db
-
-  ensureDir(DB_PATH)
-  db = new Database(DB_PATH)
-
-  // 性能优化
-  db.pragma('journal_mode = WAL')
-  db.pragma('foreign_keys = ON')
-  db.pragma('busy_timeout = 5000')
-
-  return db
+export async function closeDb(): Promise<void> {
+  await pool.end()
 }
 
-export function closeDb(): void {
-  if (db) {
-    db.close()
-    db = null
+/**
+ * 在单个事务中执行 fn：BEGIN/COMMIT/ROLLBACK 全部托管，异常时回滚并向上抛出。
+ * 用于需要行级锁或多个写操作原子生效的场景（如任务抢占）。
+ */
+export async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const result = await fn(client)
+    await client.query('COMMIT')
+    return result
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK')
+    } catch {
+      // 连接已断开时 ROLLBACK 会失败，此时连接销毁即自动回滚
+    }
+    throw error
+  } finally {
+    client.release()
   }
 }

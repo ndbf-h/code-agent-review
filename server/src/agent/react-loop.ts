@@ -1,4 +1,4 @@
-import { llmClient } from './llm-client'
+import { llmClient, type LlmClient } from './llm-client'
 import { toolRegistry } from './tool-registry'
 import { Memory } from './memory'
 import type { ToolDefinition, StreamChunk } from './types'
@@ -35,12 +35,18 @@ export async function runReActLoop(
   tools: ToolDefinition[],
   memory: Memory,
   onStep?: StepCallback,
-  options: { stream?: boolean } = {}
+  options: { stream?: boolean; client?: LlmClient; signal?: AbortSignal } = {}
 ): Promise<string> {
+  // 按角色路由的 LLM 客户端（缺省用全局单例，行为与路由开启前一致）
+  const llm = options.client || llmClient
+  const signal = options.signal
   const useStream = options.stream !== false
   memory.add({ role: 'system', content: systemPrompt })
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
+    if (signal?.aborted) {
+      throw new Error('任务已取消')
+    }
     const context = memory.getContext()
     logger.debug(`Round ${round + 1}/${MAX_ROUNDS}`, { contextLen: context.length })
 
@@ -49,7 +55,7 @@ export async function runReActLoop(
       let fullContent = ''
       const pendingToolCalls: PendingToolCall[] = []
 
-      for await (const chunk of llmClient.chatStream(context, tools)) {
+      for await (const chunk of llm.chatStream(context, tools, { signal })) {
         switch (chunk.type) {
           case 'text':
             fullContent += chunk.content
@@ -131,7 +137,7 @@ export async function runReActLoop(
       continue
     } else {
       // ── 非流式路径（兼容旧逻辑）──
-      const response = await llmClient.chatWithRetry(context, tools)
+      const response = await llm.chatWithRetry(context, tools, { signal })
 
       if (response.finishReason === 'stop') {
         memory.add({ role: 'assistant', content: response.content })
@@ -193,7 +199,7 @@ export async function runReActLoop(
   })
 
   const context = memory.getContext()
-  const finalResponse = await llmClient.chatWithRetry(context, [])
+  const finalResponse = await llm.chatWithRetry(context, [], { signal })
   memory.add({ role: 'assistant', content: finalResponse.content })
   return finalResponse.content
 }

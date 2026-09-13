@@ -1,0 +1,368 @@
+{
+  "summary": {
+    "totalQueries": 24,
+    "avgRecallAt5": 0.75,
+    "avgMrr": 0.7291666666666666,
+    "zeroResultRate": 0.25,
+    "byType": [
+      {
+        "type": "exact-english",
+        "queries": 5,
+        "avgRecallAt5": 1,
+        "avgMrr": 1
+      },
+      {
+        "type": "paraphrase-english",
+        "queries": 5,
+        "avgRecallAt5": 1,
+        "avgMrr": 0.9
+      },
+      {
+        "type": "chinese-only",
+        "queries": 5,
+        "avgRecallAt5": 0,
+        "avgMrr": 0
+      },
+      {
+        "type": "code-snippet",
+        "queries": 4,
+        "avgRecallAt5": 0.75,
+        "avgMrr": 0.75
+      },
+      {
+        "type": "dimension-filtered",
+        "queries": 5,
+        "avgRecallAt5": 1,
+        "avgMrr": 1
+      }
+    ]
+  },
+  "results": [
+    {
+      "queryId": "rag-e1",
+      "type": "exact-english",
+      "expectedDocIds": [
+        "security-sql-injection"
+      ],
+      "retrievedDocIds": [
+        "security-sql-injection",
+        "security-xss",
+        "performance-database-loop",
+        "performance-complexity"
+      ],
+      "recallAt5": 1,
+      "mrr": 1,
+      "zeroResult": false
+    },
+    {
+      "queryId": "rag-e2",
+      "type": "exact-english",
+      "expectedDocIds": [
+        "security-xss"
+      ],
+      "retrievedDocIds": [
+        "security-xss"
+      ],
+      "recallAt5": 1,
+      "mrr": 1,
+      "zeroResult": false
+    },
+    {
+      "queryId": "rag-e3",
+      "type": "exact-english",
+      "expectedDocIds": [
+        "security-secrets"
+      ],
+      "retrievedDocIds": [
+        "security-secrets"
+      ],
+      "recallAt5": 1,
+      "mrr": 1,
+      "zeroResult": false
+    },
+    {
+      "queryId": "rag-e4",
+      "type": "exact-english",
+      "expectedDocIds": [
+        "performance-database-loop"
+      ],
+      "retrievedDocIds": [
+        "performance-database-loop",
+        "security-sql-injection",
+        "performance-complexity",
+        "security-secrets"
+      ],
+      "recallAt5": 1,
+      "mrr": 1,
+      "zeroResult": false
+    },
+    {
+      "queryId": "rag-e5",
+      "type": "exact-english",
+      "expectedDocIds": [
+        "performance-complexity"
+      ],
+      "retrievedDocIds": [
+        "performance-complexity",
+        "performance-database-loop",
+        "logic-boundaries",
+        "style-maintainability"
+      ],
+      "recallAt5": 1,
+      "mrr": 1,
+      "zeroResult": false
+    },
+    {
+      "queryId": "rag-p1",
+      "type": "paraphrase-english",
+      "expectedDocIds": [
+        "security-xss"
+      ],
+      "retrievedDocIds": [
+        "security-xss",
+        "security-sql-injection"
+      ],
+      "recallAt5": 1,
+      "mrr": 1,
+      "zeroResult": false
+    },
+    {
+      "queryId": "rag-p2",
+      "type": "paraphrase-english",
+      "expectedDocIds": [
+        "performance-database-loop"
+      ],
+      "retrievedDocIds": [
+        "performance-database-loop",
+        "security-sql-injection",
+        "security-secrets"
+      ],
+      "recallAt5": 1,
+      "mrr": 1,
+      "zeroResult": false
+    },
+    {
+      "queryId": "rag-p3",
+      "type": "paraphrase-english",
+      "expectedDocIds": [
+        "security-secrets"
+      ],
+      "retrievedDocIds": [
+        "security-sql-injection",
+        "security-secrets",
+        "logic-boundaries"
+      ],
+      "recallAt5": 1,
+      "mrr": 0.5,
+      "zeroResult": false
+    },
+    {
+      "queryId": "rag-p4",
+      "type": "paraphrase-english",
+      "expectedDocIds": [
+        "logic-boundaries"
+      ],
+      "retrievedDocIds": [
+        "logic-boundaries",
+        "performance-database-loop",
+        "performance-complexity",
+        "security-sql-injection",
+        "security-xss"
+      ],
+      "recallAt5": 1,
+      "mrr": 1,
+      "zeroResult": false
+    },
+    {
+      "queryId": "rag-p5",
+      "type": "paraphrase-english",
+      "expectedDocIds": [
+        "logic-null-errors"
+      ],
+      "retrievedDocIds": [
+        "logic-null-errors",
+        "performance-database-loop",
+        "performance-complexity",
+        "style-maintainability"
+      ],
+      "recallAt5": 1,
+      "mrr": 1,
+      "zeroResult": false
+    },
+    {
+      "queryId": "rag-c1",
+      "type": "chinese-only",
+      "expectedDocIds": [
+        "security-sql-injection"
+      ],
+      "retrievedDocIds": [],
+      "recallAt5": 0,
+      "mrr": 0,
+      "zeroResult": true
+    },
+    {
+      "queryId": "rag-c2",
+      "type": "chinese-only",
+      "expectedDocIds": [
+        "performance-database-loop"
+      ],
+      "retrievedDocIds": [],
+      "recallAt5": 0,
+      "mrr": 0,
+      "zeroResult": true
+    },
+    {
+      "queryId": "rag-c3",
+      "type": "chinese-only",
+      "expectedDocIds": [
+        "security-secrets"
+      ],
+      "retrievedDocIds": [],
+      "recallAt5": 0,
+      "mrr": 0,
+      "zeroResult": true
+    },
+    {
+      "queryId": "rag-c4",
+      "type": "chinese-only",
+      "expectedDocIds": [
+        "logic-null-errors"
+      ],
+      "retrievedDocIds": [],
+      "recallAt5": 0,
+      "mrr": 0,
+      "zeroResult": true
+    },
+    {
+      "queryId": "rag-c5",
+      "type": "chinese-only",
+      "expectedDocIds": [
+        "logic-boundaries"
+      ],
+      "retrievedDocIds": [],
+      "recallAt5": 0,
+      "mrr": 0,
+      "zeroResult": true
+    },
+    {
+      "queryId": "rag-s1",
+      "type": "code-snippet",
+      "expectedDocIds": [
+        "security-sql-injection"
+      ],
+      "retrievedDocIds": [
+        "security-sql-injection",
+        "security-secrets"
+      ],
+      "recallAt5": 1,
+      "mrr": 1,
+      "zeroResult": false
+    },
+    {
+      "queryId": "rag-s2",
+      "type": "code-snippet",
+      "expectedDocIds": [
+        "security-xss"
+      ],
+      "retrievedDocIds": [],
+      "recallAt5": 0,
+      "mrr": 0,
+      "zeroResult": true
+    },
+    {
+      "queryId": "rag-s3",
+      "type": "code-snippet",
+      "expectedDocIds": [
+        "performance-database-loop"
+      ],
+      "retrievedDocIds": [
+        "performance-database-loop",
+        "logic-null-errors"
+      ],
+      "recallAt5": 1,
+      "mrr": 1,
+      "zeroResult": false
+    },
+    {
+      "queryId": "rag-s4",
+      "type": "code-snippet",
+      "expectedDocIds": [
+        "logic-null-errors"
+      ],
+      "retrievedDocIds": [
+        "logic-null-errors"
+      ],
+      "recallAt5": 1,
+      "mrr": 1,
+      "zeroResult": false
+    },
+    {
+      "queryId": "rag-d1",
+      "type": "dimension-filtered",
+      "expectedDocIds": [
+        "logic-null-errors"
+      ],
+      "retrievedDocIds": [
+        "logic-null-errors"
+      ],
+      "recallAt5": 1,
+      "mrr": 1,
+      "zeroResult": false
+    },
+    {
+      "queryId": "rag-d2",
+      "type": "dimension-filtered",
+      "expectedDocIds": [
+        "performance-database-loop"
+      ],
+      "retrievedDocIds": [
+        "performance-database-loop"
+      ],
+      "recallAt5": 1,
+      "mrr": 1,
+      "zeroResult": false
+    },
+    {
+      "queryId": "rag-d3",
+      "type": "dimension-filtered",
+      "expectedDocIds": [
+        "security-sql-injection"
+      ],
+      "retrievedDocIds": [
+        "security-sql-injection",
+        "security-xss"
+      ],
+      "recallAt5": 1,
+      "mrr": 1,
+      "zeroResult": false
+    },
+    {
+      "queryId": "rag-d4",
+      "type": "dimension-filtered",
+      "expectedDocIds": [
+        "style-maintainability"
+      ],
+      "retrievedDocIds": [
+        "style-maintainability"
+      ],
+      "recallAt5": 1,
+      "mrr": 1,
+      "zeroResult": false
+    },
+    {
+      "queryId": "rag-d5",
+      "type": "dimension-filtered",
+      "expectedDocIds": [
+        "performance-database-loop",
+        "performance-complexity"
+      ],
+      "retrievedDocIds": [
+        "performance-complexity",
+        "performance-database-loop"
+      ],
+      "recallAt5": 1,
+      "mrr": 1,
+      "zeroResult": false
+    }
+  ]
+}

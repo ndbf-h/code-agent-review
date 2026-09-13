@@ -2,17 +2,19 @@ import { v4 as uuidv4 } from 'uuid'
 import type { Task, Agent, Message, ReportContent, AgentRole } from '../../../shared/types'
 import { insertTask, updateTaskStatus, getTask, insertAgent, insertMessage, insertReport, getReportByTask, getMessagesByTask, getAgentsByTask } from '../db/queries'
 
-async function createTask(code: string, language: string, title?: string): Promise<Task> {
+async function createTask(code: string, language: string, title?: string, scopeId?: string): Promise<Task> {
+  const id = uuidv4()
   const task: Task = {
-    id: uuidv4(),
+    id,
     title: title || `Code Review - ${new Date().toLocaleString()}`,
     codeSnippet: code,
     language,
+    scopeId: scopeId || id,
     status: 'pending',
     createdAt: new Date().toISOString()
   }
 
-  insertTask(task)
+  await insertTask(task)
   return task
 }
 
@@ -29,7 +31,7 @@ async function createAgentsForTask(taskId: string): Promise<void> {
       modelName,
       createdAt: new Date().toISOString()
     }
-    insertAgent(agent)
+    await insertAgent(agent)
   }
 }
 
@@ -41,7 +43,7 @@ async function saveReport(taskId: string, reportContent: ReportContent, score: n
     score,
     createdAt: new Date().toISOString()
   }
-  insertReport(report)
+  await insertReport(report)
 }
 
 async function getTaskDetail(taskId: string): Promise<{
@@ -50,10 +52,10 @@ async function getTaskDetail(taskId: string): Promise<{
   messages: Message[]
   report: { content: ReportContent; score: number } | null
 }> {
-  const task = getTask(taskId)
-  const agents = getAgentsByTask(taskId)
-  const messages = getMessagesByTask(taskId)
-  const report = getReportByTask(taskId)
+  const task = await getTask(taskId)
+  const agents = await getAgentsByTask(taskId)
+  const messages = await getMessagesByTask(taskId)
+  const report = await getReportByTask(taskId)
 
   let reportData = null
   if (report) {

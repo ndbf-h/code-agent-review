@@ -1,0 +1,24 @@
+{"id":"rag-e1","type":"exact-english","query":"sql injection parameterized query user input","language":"javascript","expectedDocIds":["security-sql-injection"]}
+{"id":"rag-e2","type":"exact-english","query":"xss innerhtml sanitize html escape","language":"javascript","expectedDocIds":["security-xss"]}
+{"id":"rag-e3","type":"exact-english","query":"hardcoded api key secret token credential","language":"python","expectedDocIds":["security-secrets"]}
+{"id":"rag-e4","type":"exact-english","query":"n+1 query in loop batch cache database","language":"java","expectedDocIds":["performance-database-loop"]}
+{"id":"rag-e5","type":"exact-english","query":"nested loop blocking synchronous io large array","language":"go","expectedDocIds":["performance-complexity"]}
+{"id":"rag-p1","type":"paraphrase-english","query":"user typed text rendered as raw markup attack","language":"javascript","expectedDocIds":["security-xss"],"note":"转述：无 xss/sanitize 等关键词"}
+{"id":"rag-p2","type":"paraphrase-english","query":"database queried once per item instead of joining","language":"java","expectedDocIds":["performance-database-loop"],"note":"转述：queried 不等于 query 关键词"}
+{"id":"rag-p3","type":"paraphrase-english","query":"store credentials outside the repository","language":"go","expectedDocIds":["security-secrets"]}
+{"id":"rag-p4","type":"paraphrase-english","query":"check array bounds and empty collections","language":"python","expectedDocIds":["logic-boundaries"]}
+{"id":"rag-p5","type":"paraphrase-english","query":"swallowing exceptions silently in async code","language":"javascript","expectedDocIds":["logic-null-errors"]}
+{"id":"rag-c1","type":"chinese-only","query":"如何防止数据库查询被恶意拼接","language":"javascript","expectedDocIds":["security-sql-injection"],"note":"纯中文查询在词元打分下预期零结果（baseline 已知弱点，P1 混合检索的改进点）"}
+{"id":"rag-c2","type":"chinese-only","query":"循环里查数据库怎么优化","language":"java","expectedDocIds":["performance-database-loop"],"note":"纯中文，预期零结果"}
+{"id":"rag-c3","type":"chinese-only","query":"密钥不能写死在代码里","language":"python","expectedDocIds":["security-secrets"],"note":"纯中文，预期零结果"}
+{"id":"rag-c4","type":"chinese-only","query":"空指针和异常处理规范","language":"go","expectedDocIds":["logic-null-errors"],"note":"纯中文，预期零结果"}
+{"id":"rag-c5","type":"chinese-only","query":"数组越界与边界检查","language":"javascript","expectedDocIds":["logic-boundaries"],"note":"纯中文，预期零结果"}
+{"id":"rag-s1","type":"code-snippet","query":"db.query('SELECT * FROM users WHERE id=' + userId)","language":"javascript","expectedDocIds":["security-sql-injection"]}
+{"id":"rag-s2","type":"code-snippet","query":"element.innerHTML = userInput","language":"javascript","expectedDocIds":["security-xss"]}
+{"id":"rag-s3","type":"code-snippet","query":"for (const id of ids) { await db.find(id) }","language":"javascript","expectedDocIds":["performance-database-loop"],"note":"db 不等于 database 关键词，词元重合度低"}
+{"id":"rag-s4","type":"code-snippet","query":"try { run() } catch (e) {}","language":"javascript","expectedDocIds":["logic-null-errors"]}
+{"id":"rag-d1","type":"dimension-filtered","query":"error handling propagation","language":"javascript","dimension":"logic","expectedDocIds":["logic-null-errors"]}
+{"id":"rag-d2","type":"dimension-filtered","query":"query performance optimization","language":"go","dimension":"performance","expectedDocIds":["performance-database-loop"]}
+{"id":"rag-d3","type":"dimension-filtered","query":"user input validation","language":"java","dimension":"security","expectedDocIds":["security-sql-injection"]}
+{"id":"rag-d4","type":"dimension-filtered","query":"naming and comments","language":"python","dimension":"style","expectedDocIds":["style-maintainability"]}
+{"id":"rag-d5","type":"dimension-filtered","query":"loop performance inside request handler","language":"javascript","dimension":"performance","expectedDocIds":["performance-database-loop","performance-complexity"],"note":"双期望文档，考察排序"}

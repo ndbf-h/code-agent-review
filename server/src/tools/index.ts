@@ -2,6 +2,8 @@ import { toolRegistry } from '../agent/tool-registry'
 import type { Tool } from '../agent/tool-registry'
 import { decomposeTask, assignAgent, collectResults, generateReport } from './orchestration'
 import { analyzeCode, checkPattern, checkComplexity, validateSyntax } from './review'
+import { applyFixes } from './fix'
+import { retrieveCodingGuidelines } from './rag'
 
 // 新增 readFile 工具
 const readFile: Tool = {
@@ -35,6 +37,9 @@ function registerAllTools(): void {
   toolRegistry.register(checkPattern)
   toolRegistry.register(checkComplexity)
   toolRegistry.register(validateSyntax)
+
+  toolRegistry.register(applyFixes)
+  toolRegistry.register(retrieveCodingGuidelines)
 
   console.log(`[tools] Registered ${toolRegistry.getDefinitions().length} tools`)
 }

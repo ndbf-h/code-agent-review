@@ -255,8 +255,8 @@ function handleSubmit() {
   padding: 2px 8px;
   font-size: 11px;
   font-weight: 600;
-  color: #059669;
-  background: #d1fae5;
+  color: var(--color-success-text);
+  background: var(--color-success-bg);
   border-radius: 10px;
   white-space: nowrap;
   animation: badge-pop 0.25s ease;

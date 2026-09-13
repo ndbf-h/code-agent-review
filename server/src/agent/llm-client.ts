@@ -9,8 +9,46 @@ import type {
 } from './types'
 import { createLogger } from '../logger'
 import { LlmError } from '../errors'
+import { createSemaphore } from '../utils/semaphore'
+import { recordLlmUsage } from '../observability/tracing'
 
 const logger = createLogger('llm-client')
+
+// ── LLM 并发信号量 ──
+// 每个任务约 5 路 LLM 调用（1 编排 + 4 reviewer 并行），worker prefetch 数 × 5
+// 就是同时在飞的请求上限；超过配额会造成大量 429/排队，这里在进程内统一限流
+const llmGate = createSemaphore(parseInt(process.env.LLM_MAX_CONCURRENCY || '12', 10))
+
+// ── 可观测性：Token 使用量追踪 ──
+
+let promptTokens = 0
+let completionTokens = 0
+let totalRequests = 0
+
+/** 生成简短请求 ID，用于链路追踪 */
+function generateRequestId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2)
+}
+
+/** 获取累计 Token 使用量 */
+export function getTokenUsage() {
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens: promptTokens + completionTokens
+  }
+}
+
+/** 重置 Token 使用量计数器 */
+export function resetTokenUsage() {
+  promptTokens = 0
+  completionTokens = 0
+}
+
+/** 获取当前会话请求次数 */
+export function getRequestCount() {
+  return totalRequests
+}
 
 // ── 环境配置 ──
 
@@ -68,8 +106,12 @@ class LlmClient {
   private config: LlmConfig
   private maxRetries: number
 
-  constructor() {
-    this.config = loadConfig()
+  /**
+   * overrides 可覆盖任意配置项（如评测 judge、按角色路由使用不同模型）；
+   * 未覆盖的字段仍从环境变量读取。
+   */
+  constructor(overrides?: Partial<LlmConfig>) {
+    this.config = { ...loadConfig(), ...overrides }
     this.maxRetries = loadMaxRetries()
   }
 
@@ -83,40 +125,46 @@ class LlmClient {
    * @param tools 可选的工具定义
    * @param options 可选的调用选项
    */
+  get modelName(): string {
+    return this.config.model
+  }
+
   async chat(
     messages: LlmMessage[],
     tools?: ToolDefinition[],
     options?: ChatOptions
   ): Promise<LlmResponse> {
-    if (this.config.provider === 'anthropic') {
-      return this.chatAnthropic(messages, tools, options)
+    await llmGate.acquire()
+    try {
+      if (this.config.provider === 'anthropic') {
+        return await this.chatAnthropic(messages, tools, options)
+      }
+      return await this.chatOpenAI(messages, tools, options)
+    } finally {
+      llmGate.release()
     }
-    return this.chatOpenAI(messages, tools, options)
   }
 
   /**
    * 流式对话，返回 AsyncGenerator<StreamChunk>
    * 解析 OpenAI 兼容的 SSE (Server-Sent Events) 格式
+   * 信号量在整个流式生命周期内持有（迭代完成或提前 return 时释放）
    */
   async *chatStream(
     messages: LlmMessage[],
     tools?: ToolDefinition[],
     options?: ChatOptions
   ): AsyncGenerator<StreamChunk> {
-    if (this.config.provider === 'anthropic') {
-      // Anthropic 流式暂未实现，回退到非流式
-      logger.warn('Anthropic 流式暂未实现，回退到非流式')
-      const response = await this.chatAnthropic(messages, tools)
-      if (response.content) {
-        yield { type: 'text', content: response.content }
+    await llmGate.acquire()
+    try {
+      if (this.config.provider === 'anthropic') {
+        yield* this.chatAnthropicStream(messages, tools, options)
+        return
       }
-      for (const tc of response.toolCalls) {
-        yield { type: 'tool_use', id: tc.id, name: tc.name, input: tc.input }
-      }
-      yield { type: 'done' }
-      return
+      yield* this.chatOpenAIStream(messages, tools, options)
+    } finally {
+      llmGate.release()
     }
-    yield* this.chatOpenAIStream(messages, tools, options)
   }
 
   /**
@@ -145,6 +193,11 @@ class LlmClient {
         return await this.chat(messages, tools, options)
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error))
+
+        // 取消中断：直接上抛，绝不重试
+        if (options?.signal?.aborted) {
+          throw lastError
+        }
 
         // 检查是否为不可重试的 4xx 错误
         if (lastError instanceof LlmError && lastError.details) {
@@ -192,7 +245,8 @@ class LlmClient {
   async chatStructured<T>(
     messages: LlmMessage[],
     schema?: Record<string, unknown>,
-    maxRetries?: number
+    maxRetries?: number,
+    signal?: AbortSignal
   ): Promise<T> {
     const retries = maxRetries ?? this.maxRetries
     const augmentedMessages = [...messages]
@@ -223,7 +277,7 @@ class LlmClient {
           await sleep(delay)
         }
 
-        const response = await this.chat(augmentedMessages, undefined, { jsonMode: true })
+        const response = await this.chat(augmentedMessages, undefined, { jsonMode: true, signal })
         const responseText = response.content
         lastResponseText = responseText
         const jsonText = extractJson(responseText)
@@ -237,6 +291,10 @@ class LlmClient {
         return parsed
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error))
+
+        if (signal?.aborted) {
+          throw lastError
+        }
 
         if (attempt >= retries) {
           break
@@ -331,7 +389,10 @@ class LlmClient {
     tools?: ToolDefinition[],
     options?: ChatOptions
   ): Promise<LlmResponse> {
+    const requestId = generateRequestId()
+    totalRequests++
     logger.debug('LLM 请求开始', {
+      requestId,
       model: this.config.model,
       provider: this.config.provider,
       messageCount: messages.length
@@ -363,7 +424,8 @@ class LlmClient {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.config.apiKey}`
         },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
+        signal: options?.signal
       })
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
@@ -393,6 +455,14 @@ class LlmClient {
       finish_reason: string
     }>
 
+    // 解析 token 使用量
+    const usage = data.usage as { prompt_tokens?: number; completion_tokens?: number } | undefined
+    if (usage) {
+      promptTokens += usage.prompt_tokens || 0
+      completionTokens += usage.completion_tokens || 0
+      recordLlmUsage({ model: this.config.model, promptTokens: usage.prompt_tokens || 0, completionTokens: usage.completion_tokens || 0 })
+    }
+
     const choice = choices[0]
     if (!choice) {
       logger.warn('LLM 返回空 choices')
@@ -420,7 +490,13 @@ class LlmClient {
 
     const contentLength = msg.content?.length || 0
     const finishReason = hasToolCalls ? 'tool_use' : 'stop'
-    logger.info('LLM 响应成功', { finishReason, contentLength })
+    logger.info('LLM 响应成功', {
+      requestId,
+      finishReason,
+      contentLength,
+      promptTokens: usage?.prompt_tokens || 0,
+      completionTokens: usage?.completion_tokens || 0
+    })
 
     return {
       content: msg.content || '',
@@ -438,7 +514,10 @@ class LlmClient {
     tools?: ToolDefinition[],
     options?: ChatOptions
   ): AsyncGenerator<StreamChunk> {
+    const requestId = generateRequestId()
+    totalRequests++
     logger.debug('LLM 流式请求开始', {
+      requestId,
       model: this.config.model,
       provider: this.config.provider,
       messageCount: messages.length
@@ -468,7 +547,8 @@ class LlmClient {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.config.apiKey}`
         },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
+        signal: options?.signal
       })
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
@@ -582,6 +662,19 @@ class LlmClient {
               }
             }
 
+            // 从流式最后 chunk 提取 token 使用量（DeepSeek/OpenAI 在 finish_reason chunk 返回 usage）
+            const streamUsage = parsed.usage as { prompt_tokens?: number; completion_tokens?: number } | undefined
+            if (streamUsage) {
+              promptTokens += streamUsage.prompt_tokens || 0
+              completionTokens += streamUsage.completion_tokens || 0
+              recordLlmUsage({ model: this.config.model, promptTokens: streamUsage.prompt_tokens || 0, completionTokens: streamUsage.completion_tokens || 0 })
+              logger.debug('LLM 流式 token 用量', {
+                requestId,
+                promptTokens: streamUsage.prompt_tokens,
+                completionTokens: streamUsage.completion_tokens
+              })
+            }
+
             // finish_reason 为 stop 且没有 tool_calls 时表示结束
             if (choice.finish_reason === 'stop' && !delta?.tool_calls && !doneYielded) {
               yield { type: 'done' }
@@ -608,12 +701,272 @@ class LlmClient {
   // Anthropic 格式（保留兼容）
   // ═══════════════════════════════════════════════════
 
+  /**
+   * Anthropic Messages API 流式请求
+   * 解析 SSE 事件流（event: + data: 格式），转换为 StreamChunk
+   *
+   * Anthropic 流式事件类型:
+   *   message_start      - 消息开始，含 usage.input_tokens
+   *   content_block_start - 内容块开始，含 content_block 类型（text / tool_use）
+   *   content_block_delta - 增量文本（text_delta）或 tool_use 部分 JSON（input_json_delta）
+   *   content_block_stop  - 内容块结束
+   *   message_delta       - 含 stop_reason 和 usage.output_tokens
+   *   message_stop        - 流结束
+   *
+   * tool_use 的 input 通过 input_json_delta 增量传输，
+   * 需要手动拼接完整 JSON 后 parse 为对象
+   */
+  private async *chatAnthropicStream(
+    messages: LlmMessage[],
+    tools?: ToolDefinition[],
+    options?: ChatOptions
+  ): AsyncGenerator<StreamChunk> {
+    const requestId = generateRequestId()
+    totalRequests++
+    logger.debug('LLM 流式请求开始 (Anthropic)', {
+      requestId,
+      model: this.config.model,
+      provider: this.config.provider,
+      messageCount: messages.length
+    })
+
+    const anthropicTools = tools?.map(t => ({
+      name: t.name,
+      description: t.description,
+      input_schema: {
+        type: 'object' as const,
+        properties: t.parameters,
+        required: Object.keys(t.parameters)
+      }
+    }))
+
+    const systemMessage = messages.find(m => m.role === 'system')
+    const nonSystemMessages = messages.filter(m => m.role !== 'system')
+
+    const body: Record<string, unknown> = {
+      model: this.config.model,
+      max_tokens: options?.maxTokens ?? 4096,
+      stream: true,
+      messages: nonSystemMessages.map(m => ({ role: m.role, content: m.content }))
+    }
+
+    if (systemMessage) {
+      body.system = systemMessage.content
+    }
+    if (options?.temperature !== undefined) {
+      body.temperature = options.temperature
+    }
+    if (anthropicTools && anthropicTools.length > 0) {
+      body.tools = anthropicTools
+    }
+
+    let response: Response
+    try {
+      response = await fetch(`${this.config.baseUrl}/v1/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': this.config.apiKey,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify(body),
+        signal: options?.signal
+      })
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      logger.error('LLM 流式网络请求失败 (Anthropic)', { error: msg })
+      throw error
+    }
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      logger.error('LLM 流式请求失败 (Anthropic)', {
+        status: response.status,
+        body: errorText
+      })
+      throw new LlmError(
+        `LLM stream error: ${response.status} ${errorText}`,
+        { status: response.status, body: errorText }
+      )
+    }
+
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    // 累积 tool_use 数据（按 content block index 分组）
+    // Anthropic 的 tool_use input 以增量 JSON（input_json_delta）传输
+    const toolUsesAcc = new Map<
+      number,
+      { id: string; name: string; inputJson: string }
+    >()
+
+    let doneYielded = false
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
+    // Anthropic 流式把 input_tokens 拆在 message_start、output_tokens 拆在 message_delta，
+    // 局部暂存后在 delta 处合并为一次 usage 记录，避免重复计数
+    let anthropicInputTokens = 0
+
+    try {
+      reader = response.body?.getReader()
+      if (!reader) {
+        throw new LlmError('无法获取流式响应读取器')
+      }
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        // 归一化行尾符（Windows \r\n → Unix \n）
+        buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n')
+
+        // Anthropic SSE 事件以 \n\n 分隔
+        while (true) {
+          const eventEnd = buffer.indexOf('\n\n')
+          if (eventEnd === -1) break
+
+          const eventText = buffer.slice(0, eventEnd)
+          buffer = buffer.slice(eventEnd + 2)
+
+          // 解析 event: 和 data: 行
+          let eventType = ''
+          let dataStr = ''
+
+          for (const line of eventText.split('\n')) {
+            if (line.startsWith('event: ')) {
+              eventType = line.slice(7).trim()
+            } else if (line.startsWith('data: ')) {
+              dataStr = line.slice(6)
+            }
+          }
+
+          if (!dataStr) continue
+
+          try {
+            const parsed = JSON.parse(dataStr) as Record<string, unknown>
+
+            switch (eventType) {
+              case 'content_block_start': {
+                const contentBlock = parsed.content_block as Record<
+                  string,
+                  unknown
+                > | undefined
+                if (contentBlock?.type === 'tool_use') {
+                  const index = (parsed.index as number) ?? 0
+                  toolUsesAcc.set(index, {
+                    id: (contentBlock.id as string) || '',
+                    name: (contentBlock.name as string) || '',
+                    inputJson: ''
+                  })
+                }
+                break
+              }
+
+              case 'content_block_delta': {
+                const delta = parsed.delta as Record<string, unknown> | undefined
+                const index = (parsed.index as number) ?? 0
+
+                if (delta?.type === 'text_delta') {
+                  const text = (delta.text as string) || ''
+                  yield { type: 'text', content: text }
+                } else if (delta?.type === 'input_json_delta') {
+                  const acc = toolUsesAcc.get(index)
+                  if (acc) {
+                    acc.inputJson += (delta.partial_json as string) || ''
+                  }
+                }
+                break
+              }
+
+              case 'content_block_stop': {
+                // 内容块结束 — 若为 tool_use 则提交累积完成的完整结果
+                const index = (parsed.index as number) ?? 0
+                const acc = toolUsesAcc.get(index)
+                if (acc && acc.name) {
+                  let parsedInput: Record<string, unknown> = {}
+                  try {
+                    parsedInput = JSON.parse(acc.inputJson || '{}')
+                  } catch {
+                    // 增量 JSON 拼接不完整时保持空对象
+                    logger.warn('tool_use input JSON 解析失败', {
+                      id: acc.id,
+                      name: acc.name
+                    })
+                  }
+                  yield {
+                    type: 'tool_use',
+                    id: acc.id,
+                    name: acc.name,
+                    input: parsedInput
+                  }
+                }
+                break
+              }
+
+              case 'message_delta': {
+                // 记录 stop_reason 和 output_tokens
+                const delta = parsed.delta as Record<string, unknown> | undefined
+                const usage = parsed.usage as
+                  | { output_tokens?: number }
+                  | undefined
+                if (usage?.output_tokens) {
+                  completionTokens += usage.output_tokens
+                  recordLlmUsage({ model: this.config.model, promptTokens: anthropicInputTokens, completionTokens: usage.output_tokens })
+                }
+                logger.debug('Anthropic 流式 message_delta', {
+                  requestId,
+                  stopReason: delta?.stop_reason,
+                  outputTokens: usage?.output_tokens
+                })
+                break
+              }
+
+              case 'message_start': {
+                // 记录 input_tokens
+                const message = parsed.message as Record<string, unknown> | undefined
+                const usage = message?.usage as
+                  | { input_tokens?: number }
+                  | undefined
+                if (usage?.input_tokens) {
+                  promptTokens += usage.input_tokens
+                  anthropicInputTokens = usage.input_tokens
+                }
+                break
+              }
+
+              case 'message_stop': {
+                if (!doneYielded) {
+                  yield { type: 'done' }
+                  doneYielded = true
+                }
+                return
+              }
+            }
+          } catch {
+            // 跳过无法解析的事件
+            continue
+          }
+        }
+      }
+
+      // 流读取完毕但未收到 message_stop，发送结束信号
+      if (!doneYielded) {
+        logger.debug('LLM 流式传输结束（未收到 message_stop）')
+        yield { type: 'done' }
+      }
+    } finally {
+      reader?.releaseLock()
+    }
+  }
+
   private async chatAnthropic(
     messages: LlmMessage[],
     tools?: ToolDefinition[],
     options?: ChatOptions
   ): Promise<LlmResponse> {
+    const requestId = generateRequestId()
+    totalRequests++
     logger.debug('LLM 请求开始 (Anthropic)', {
+      requestId,
       model: this.config.model,
       provider: this.config.provider,
       messageCount: messages.length
@@ -657,7 +1010,8 @@ class LlmClient {
           'x-api-key': this.config.apiKey,
           'anthropic-version': '2023-06-01'
         },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
+        signal: options?.signal
       })
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
@@ -686,6 +1040,14 @@ class LlmClient {
       input?: Record<string, unknown>
     }>
 
+    // 解析 Anthropic token 使用量（input_tokens / output_tokens）
+    const usage = data.usage as { input_tokens?: number; output_tokens?: number } | undefined
+    if (usage) {
+      promptTokens += usage.input_tokens || 0
+      completionTokens += usage.output_tokens || 0
+      recordLlmUsage({ model: this.config.model, promptTokens: usage.input_tokens || 0, completionTokens: usage.output_tokens || 0 })
+    }
+
     const textBlock = content.find(c => c.type === 'text')
     const toolBlocks = content.filter(c => c.type === 'tool_use')
 
@@ -697,7 +1059,13 @@ class LlmClient {
 
     const contentLength = textBlock?.text?.length || 0
     const finishReason = toolCalls.length > 0 ? 'tool_use' : 'stop'
-    logger.info('LLM 响应成功 (Anthropic)', { finishReason, contentLength })
+    logger.info('LLM 响应成功 (Anthropic)', {
+      requestId,
+      finishReason,
+      contentLength,
+      inputTokens: usage?.input_tokens || 0,
+      outputTokens: usage?.output_tokens || 0
+    })
 
     return {
       content: textBlock?.text || '',

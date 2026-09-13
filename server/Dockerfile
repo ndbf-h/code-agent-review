@@ -1,0 +1,26 @@
+FROM node:22-bookworm-slim AS deps
+
+WORKDIR /app/server
+COPY server/package*.json ./
+RUN npm ci
+
+FROM deps AS build
+
+WORKDIR /app
+COPY server ./server
+COPY shared ./shared
+WORKDIR /app/server
+RUN npm run build
+RUN npm prune --omit=dev
+
+FROM node:22-bookworm-slim AS runtime
+
+ENV NODE_ENV=production
+WORKDIR /app/server
+
+COPY --from=build /app/server/package*.json ./
+COPY --from=build /app/server/node_modules ./node_modules
+COPY --from=build /app/server/dist ./dist
+
+EXPOSE 3001
+CMD ["node", "dist/server/src/index.js"]

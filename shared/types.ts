@@ -1,5 +1,5 @@
 // ── Task statuses ──
-type TaskStatus = 'pending' | 'orchestrating' | 'reviewing' | 'summarizing' | 'completed' | 'failed'
+type TaskStatus = 'pending' | 'orchestrating' | 'reviewing' | 'summarizing' | 'completed' | 'failed' | 'cancelled'
 
 // ── Agent roles ──
 type AgentRole = 'orchestrator' | 'security' | 'performance' | 'style' | 'logic'
@@ -30,6 +30,7 @@ interface ReportContent {
   issues: Issue[]
   score: number
   agentResults: Record<string, AgentResult>
+  reviewStatus?: Record<string, 'success' | 'fallback' | 'failed'>
 }
 
 interface Task {
@@ -39,6 +40,11 @@ interface Task {
   language: string
   status: TaskStatus
   createdAt: string
+  scopeId: string
+  /** 已失败的执行次数（仅确认失败转入重试时递增，worker 崩溃回收不计数） */
+  attemptCount?: number
+  /** worker 执行心跳时间戳（ISO），用于崩溃检测 */
+  heartbeatAt?: string | null
 }
 
 interface Agent {

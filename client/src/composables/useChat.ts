@@ -14,7 +14,8 @@ export function useChat() {
   const lastLang = ref('typescript')
   const lastError = ref<string | null>(null)
 
-  async function startReview(code: string, lang: string) {
+  async function startReview(code: string, lang: string, requestedScopeId?: string, sourceVersionId?: string) {
+    const reviewScopeId = requestedScopeId || store.scopeId
     store.reset()
     store.loading = true
     lastCode.value = code
@@ -31,11 +32,14 @@ export function useChat() {
       const response = await axios.post(`${API_BASE}/tasks`, {
         code,
         language: lang,
-        title: `Review - ${new Date().toLocaleTimeString()}`
+        title: `Review - ${new Date().toLocaleTimeString()}`,
+        scopeId: reviewScopeId || undefined,
+        sourceVersionId
       })
 
       const taskId = response.data.id
       store.setTaskId(taskId)
+      if (response.data.scopeId) store.setScopeId(response.data.scopeId)
       connect(taskId)
     } catch (error) {
       const message = error instanceof Error ? error.message : '创建任务失败'
@@ -54,5 +58,5 @@ export function useChat() {
     await startReview(lastCode.value, lastLang.value)
   }
 
-  return { codeInput, language, lastError, startReview, retry, disconnect }
+  return { codeInput, language, lastCode, lastLang, lastError, startReview, retry, disconnect }
 }

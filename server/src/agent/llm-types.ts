@@ -62,6 +62,8 @@ interface ChatOptions {
   temperature?: number
   stream?: boolean
   jsonMode?: boolean
+  /** 取消信号：中断在途 HTTP 请求（任务取消时由 consumer 传入） */
+  signal?: AbortSignal
 }
 
 export type {

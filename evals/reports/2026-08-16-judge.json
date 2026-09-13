@@ -1,0 +1,37 @@
+{
+  "judged": 2,
+  "failed": 0,
+  "avgCoverage": 10,
+  "avgPrecision": 6,
+  "avgActionability": 6,
+  "disagreementCount": 0,
+  "judgeModel": "(默认，同生产模型)",
+  "rows": [
+    {
+      "sampleId": "e01",
+      "tier": "easy",
+      "verdict": {
+        "coverage": 10,
+        "precision": 6,
+        "actionability": 6,
+        "reasoning": "加分项：所有报告的SQL注入条目准确，完全覆盖ground truth；扣分项：大量风格、逻辑等价于同一SQL注入问题的重复条目，以及无依据的数据库效率、分号、空检查等低相关建议，且部分修复建议过于笼统。"
+      },
+      "disagreement": false,
+      "matchedCount": 1,
+      "expectedCount": 1
+    },
+    {
+      "sampleId": "e02",
+      "tier": "easy",
+      "verdict": {
+        "coverage": 10,
+        "precision": 6,
+        "actionability": 6,
+        "reasoning": "完整覆盖安全注入问题且定位准确；但混入多条夸大或主观的风格/性能条目，且多数建议缺少具体修复代码。"
+      },
+      "disagreement": false,
+      "matchedCount": 1,
+      "expectedCount": 1
+    }
+  ]
+}
