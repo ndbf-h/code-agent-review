@@ -4,6 +4,24 @@
 
 这个项目的目标不是做一个简单的 LLM 聊天壳，而是模拟真实 Code Review 流程：先做规则预扫描，再由编排器规划审查重点，多个 Reviewer 并行分析，最后聚合问题、评分和修复建议。
 
+## 🚀 一键启动
+
+```bash
+# 1. 生成环境变量模板，编辑 .env 填入你的 LLM_API_KEY
+cp .env.example .env
+
+# 2. 一键启动全部服务（PostgreSQL + RabbitMQ + API + Worker + 前端）
+docker compose up --build
+```
+
+启动完成后访问：
+
+- 前端：http://localhost:5173
+- 后端健康检查：http://localhost:3001/api/health
+- RabbitMQ 管理界面：http://localhost:15672 （账号 `review` / 密码 `review`）
+
+> 前提：已安装 [Docker](https://www.docker.com/)；`.env` 里至少要填 `LLM_API_KEY`。本地开发方式（不用 Docker 跑代码）与完整环境变量说明见下方 [快速开始](#快速开始)。
+
 ## 项目亮点
 
 - **多 Agent 审查流程**：包含 `orchestrator`、`security`、`performance`、`style`、`logic` 五类角色，职责拆分清晰。
