@@ -40,7 +40,12 @@ export function scanCode(code: string, rules: Rule[], language?: string): RuleMa
     }
 
     // 语言过滤
-    if (rule.languages && rule.languages.length > 0 && language && !rule.languages.includes(language)) {
+    if (
+      rule.languages &&
+      rule.languages.length > 0 &&
+      language &&
+      !rule.languages.includes(language)
+    ) {
       continue
     }
 
@@ -59,9 +64,7 @@ export function scanCode(code: string, rules: Rule[], language?: string): RuleMa
       const lastNewline = beforeMatch.lastIndexOf('\n')
       const column = matchIndex - lastNewline
 
-      const message = typeof rule.message === 'function'
-        ? rule.message(execResult)
-        : rule.message
+      const message = typeof rule.message === 'function' ? rule.message(execResult) : rule.message
 
       matches.push({
         line,
@@ -70,7 +73,9 @@ export function scanCode(code: string, rules: Rule[], language?: string): RuleMa
         category: rule.category,
         message,
         suggestion: rule.suggestion,
-        snippet: code.substring(matchIndex, Math.min(matchIndex + matchText.length + 40, code.length)).split('\n')[0]
+        snippet: code
+          .substring(matchIndex, Math.min(matchIndex + matchText.length + 40, code.length))
+          .split('\n')[0]
       })
 
       // 防止无限循环（零长度匹配）

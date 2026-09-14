@@ -31,7 +31,10 @@ export function toInputSchema(
 ): { type: 'object'; properties: Record<string, JsonSchemaProperty>; required: string[] } {
   const properties: Record<string, JsonSchemaProperty> = {}
   for (const [key, value] of Object.entries(parameters || {})) {
-    const spec = (value && typeof value === 'object' ? value : {}) as { type?: unknown; description?: unknown }
+    const spec = (value && typeof value === 'object' ? value : {}) as {
+      type?: unknown
+      description?: unknown
+    }
     properties[key] = {
       type: typeof spec.type === 'string' ? spec.type : 'string',
       ...(typeof spec.description === 'string' ? { description: spec.description } : {})

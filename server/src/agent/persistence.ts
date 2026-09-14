@@ -1,7 +1,4 @@
 import { getDb } from '../db/connection'
-import { createLogger } from '../logger'
-
-const logger = createLogger('persistence')
 
 /**
  * 创建用于 Memory.persist() 的消息插入回调

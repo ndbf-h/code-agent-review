@@ -14,7 +14,12 @@ export function useChat() {
   const lastLang = ref('typescript')
   const lastError = ref<string | null>(null)
 
-  async function startReview(code: string, lang: string, requestedScopeId?: string, sourceVersionId?: string) {
+  async function startReview(
+    code: string,
+    lang: string,
+    requestedScopeId?: string,
+    sourceVersionId?: string
+  ) {
     const reviewScopeId = requestedScopeId || store.scopeId
     store.reset()
     store.loading = true

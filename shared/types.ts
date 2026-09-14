@@ -1,5 +1,6 @@
 // ── Task statuses ──
-type TaskStatus = 'pending' | 'orchestrating' | 'reviewing' | 'summarizing' | 'completed' | 'failed' | 'cancelled'
+type TaskStatus =
+  'pending' | 'orchestrating' | 'reviewing' | 'summarizing' | 'completed' | 'failed' | 'cancelled'
 
 // ── Agent roles ──
 type AgentRole = 'orchestrator' | 'security' | 'performance' | 'style' | 'logic'
@@ -85,7 +86,17 @@ interface Report {
 }
 
 export type {
-  TaskStatus, AgentRole, AgentStatus, MessageType, Severity,
-  Issue, AgentResult, ReportContent,
-  Task, Agent, Message, ToolCall, Report
+  TaskStatus,
+  AgentRole,
+  AgentStatus,
+  MessageType,
+  Severity,
+  Issue,
+  AgentResult,
+  ReportContent,
+  Task,
+  Agent,
+  Message,
+  ToolCall,
+  Report
 }

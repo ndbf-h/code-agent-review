@@ -70,11 +70,14 @@ const hasTask = computed(() => store.messages.length > 0 || store.loading)
 
 // 过程面板：运行时默认展开，完成后自动收起（结果优先），可手动展开回看
 const processCollapsed = ref(false)
-watch(() => store.status, (status, prev) => {
-  if ((status === 'completed' || status === 'failed') && prev && prev !== status) {
-    processCollapsed.value = true
+watch(
+  () => store.status,
+  (status, prev) => {
+    if ((status === 'completed' || status === 'failed') && prev && prev !== status) {
+      processCollapsed.value = true
+    }
   }
-})
+)
 
 // 右栏：选中问题 / 助手 / 指标
 const selectedIssue = ref<Issue | null>(null)
@@ -109,8 +112,12 @@ const statusLabel = computed(() => {
 
 /** 取消运行中/排队中的任务；终态后按钮消失 */
 const cancelling = ref(false)
-const cancellable = computed(() => store.loading && !hasReport.value
-  && ['pending', 'orchestrating', 'reviewing', 'summarizing'].includes(store.status))
+const cancellable = computed(
+  () =>
+    store.loading &&
+    !hasReport.value &&
+    ['pending', 'orchestrating', 'reviewing', 'summarizing'].includes(store.status)
+)
 
 async function cancelTask() {
   if (!store.taskId || cancelling.value) return
@@ -137,20 +144,35 @@ const streamMessages = computed(() => store.messages.filter(m => m.type !== 'rep
       <div class="welcome-header">
         <span class="welcome-icon">
           <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-            <rect width="48" height="48" rx="12" fill="url(#welcome-grad)"/>
-            <path d="M14 18l6 6-6 6" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M22 30l8-12" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <rect width="48" height="48" rx="12" fill="url(#welcome-grad)" />
+            <path
+              d="M14 18l6 6-6 6"
+              stroke="#fff"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M22 30l8-12"
+              stroke="#fff"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
             <defs>
               <linearGradient id="welcome-grad" x1="0" y1="0" x2="48" y2="48">
-                <stop stop-color="#3b5cf6"/>
-                <stop offset="1" stop-color="#8b5cf6"/>
+                <stop stop-color="#3b5cf6" />
+                <stop offset="1" stop-color="#8b5cf6" />
               </linearGradient>
             </defs>
           </svg>
         </span>
         <h2 class="welcome-title">欢迎使用 AI 代码审查</h2>
         <p class="welcome-desc">
-          粘贴代码或输入 URL，AI 将从<span class="highlight">安全</span>、<span class="highlight">性能</span>、<span class="highlight">规范</span>、<span class="highlight">逻辑</span>四个维度审查你的代码
+          粘贴代码或输入 URL，AI 将从<span class="highlight">安全</span>、<span class="highlight"
+            >性能</span
+          >、<span class="highlight">规范</span>、<span class="highlight">逻辑</span
+          >四个维度审查你的代码
         </p>
       </div>
 
@@ -233,7 +255,12 @@ const streamMessages = computed(() => store.messages.filter(m => m.type !== 'rep
           <!-- 运行中：过程事件流 -->
           <template v-else>
             <div v-for="msg in streamMessages" :key="msg.id" class="stream-row">
-              <ChatMessage :message="msg" :on-retry="msg.role === 'system' && msg.content.startsWith('错误：') ? onRetry : undefined" />
+              <ChatMessage
+                :message="msg"
+                :on-retry="
+                  msg.role === 'system' && msg.content.startsWith('错误：') ? onRetry : undefined
+                "
+              />
             </div>
             <div v-if="store.loading" class="loading-indicator">
               <span class="loading-dot"></span>
@@ -321,13 +348,21 @@ const streamMessages = computed(() => store.messages.filter(m => m.type !== 'rep
   background: var(--color-border);
 }
 
-.st-pending .status-dot { background: var(--color-warning); }
+.st-pending .status-dot {
+  background: var(--color-warning);
+}
 .st-orchestrating .status-dot,
 .st-reviewing .status-dot,
-.st-summarizing .status-dot { background: var(--color-primary); }
-.st-completed .status-dot { background: var(--color-success); }
+.st-summarizing .status-dot {
+  background: var(--color-primary);
+}
+.st-completed .status-dot {
+  background: var(--color-success);
+}
 .st-failed .status-dot,
-.st-cancelled .status-dot { background: var(--color-danger); }
+.st-cancelled .status-dot {
+  background: var(--color-danger);
+}
 
 .sb-btn.cancel {
   color: var(--color-danger-text);
@@ -345,8 +380,15 @@ const streamMessages = computed(() => store.messages.filter(m => m.type !== 'rep
 }
 
 @keyframes pulse-dot {
-  0%, 100% { opacity: 0.4; transform: scale(0.85); }
-  50% { opacity: 1; transform: scale(1.1); }
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
 }
 
 .statusbar-actions {
@@ -564,8 +606,12 @@ const streamMessages = computed(() => store.messages.filter(m => m.type !== 'rep
   animation: bounce 1.2s ease-in-out infinite;
 }
 
-.loading-dot:nth-child(2) { animation-delay: 0.15s; }
-.loading-dot:nth-child(3) { animation-delay: 0.3s; }
+.loading-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.loading-dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
 
 .loading-hint {
   margin-left: 8px;
@@ -574,8 +620,16 @@ const streamMessages = computed(() => store.messages.filter(m => m.type !== 'rep
 }
 
 @keyframes bounce {
-  0%, 80%, 100% { opacity: 0.2; transform: translateY(0); }
-  40% { opacity: 1; transform: translateY(-6px); }
+  0%,
+  80%,
+  100% {
+    opacity: 0.2;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-6px);
+  }
 }
 
 @media (max-width: 640px) {

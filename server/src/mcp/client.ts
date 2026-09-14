@@ -1,6 +1,9 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { toolRegistry, type Tool } from '../agent/tool-registry'
+import { createLogger } from '../logger'
+
+const logger = createLogger('mcp-client')
 
 /**
  * MCP Client：启动时连接 MCP_CLIENT_SERVERS 列出的外部 MCP Server，
@@ -88,12 +91,18 @@ export async function mountExternalMcpTools(): Promise<void> {
   const entries = parseMcpServerList(process.env.MCP_CLIENT_SERVERS)
   if (entries.length === 0) return
 
-  await Promise.all(entries.map(async entry => {
-    try {
-      const count = await mountSingleServer(entry)
-      console.log(`[mcp-client] 已挂载 ${entry.url} 的 ${count} 个工具（前缀 mcp_${entry.alias}_）`)
-    } catch (error) {
-      console.warn(`[mcp-client] 连接 ${entry.url} 失败，跳过: ${error instanceof Error ? error.message : error}`)
-    }
-  }))
+  await Promise.all(
+    entries.map(async entry => {
+      try {
+        const count = await mountSingleServer(entry)
+        logger.info('已挂载外部 MCP Server 工具', {
+          url: entry.url,
+          tools: count,
+          prefix: `mcp_${entry.alias}_`
+        })
+      } catch (error) {
+        logger.warn('连接外部 MCP Server 失败，跳过', { url: entry.url, error })
+      }
+    })
+  )
 }

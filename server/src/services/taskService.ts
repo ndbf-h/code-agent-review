@@ -1,8 +1,23 @@
 import { v4 as uuidv4 } from 'uuid'
+import { getConfig } from '../config'
 import type { Task, Agent, Message, ReportContent, AgentRole } from '../../../shared/types'
-import { insertTask, updateTaskStatus, getTask, insertAgent, insertMessage, insertReport, getReportByTask, getMessagesByTask, getAgentsByTask } from '../db/queries'
+import {
+  insertTask,
+  updateTaskStatus,
+  getTask,
+  insertAgent,
+  insertReport,
+  getReportByTask,
+  getMessagesByTask,
+  getAgentsByTask
+} from '../db/queries'
 
-async function createTask(code: string, language: string, title?: string, scopeId?: string): Promise<Task> {
+async function createTask(
+  code: string,
+  language: string,
+  title?: string,
+  scopeId?: string
+): Promise<Task> {
   const id = uuidv4()
   const task: Task = {
     id,
@@ -20,7 +35,7 @@ async function createTask(code: string, language: string, title?: string, scopeI
 
 async function createAgentsForTask(taskId: string): Promise<void> {
   const roles: AgentRole[] = ['orchestrator', 'security', 'performance', 'style', 'logic']
-  const modelName = process.env.LLM_MODEL || 'claude-sonnet-4-6'
+  const modelName = getConfig().llm.model
 
   for (const role of roles) {
     const agent: Agent = {
@@ -35,7 +50,11 @@ async function createAgentsForTask(taskId: string): Promise<void> {
   }
 }
 
-async function saveReport(taskId: string, reportContent: ReportContent, score: number): Promise<void> {
+async function saveReport(
+  taskId: string,
+  reportContent: ReportContent,
+  score: number
+): Promise<void> {
   const report = {
     id: `report-${taskId}`,
     taskId,

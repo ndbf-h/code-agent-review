@@ -23,7 +23,10 @@ import { runReviewTask } from '../agent/orchestrator'
 import { llmClient } from '../agent/llm-client'
 import { appendTaskEvent } from '../services/eventService'
 import { withTaskTrace } from '../observability/tracing'
+import { createLogger } from '../logger'
 import type { ReportContent } from '../../../shared/types'
+
+const logger = createLogger('worker')
 
 /**
  * 缓存键组成部分：代码 + 语言 + 模型 + prompt 版本。
@@ -32,7 +35,9 @@ import type { ReportContent } from '../../../shared/types'
 const PROMPT_VERSION = 'v1'
 
 function buildReviewCacheKey(code: string, language: string, model: string): string {
-  return createHash('sha256').update(`${code}\n--\n${language}\n--\n${model}\n--\n${PROMPT_VERSION}`).digest('hex')
+  return createHash('sha256')
+    .update(`${code}\n--\n${language}\n--\n${model}\n--\n${PROMPT_VERSION}`)
+    .digest('hex')
 }
 
 export interface TaskConsumer {
@@ -55,7 +60,11 @@ export function decideRetry(failedAttempts: number, maxAttempts: number): boolea
  * channel 上未 ack 的消息数不超过 maxConcurrentTasks，broker 据此推送——
  * 多个 worker 实例共享队列时天然分摊，不再依赖任何进程内计数器。
  */
-export function startTaskConsumer(session: RabbitSession, producer: TaskProducer, config: AppConfig): TaskConsumer {
+export function startTaskConsumer(
+  session: RabbitSession,
+  producer: TaskProducer,
+  config: AppConfig
+): TaskConsumer {
   const inFlight = new Set<Promise<void>>()
   let consumerTag: string | null = null
   let channel: Channel | null = null
@@ -69,13 +78,13 @@ export function startTaskConsumer(session: RabbitSession, producer: TaskProducer
       void handleMessage(ch, message)
     })
     consumerTag = tag
-    console.log(`[worker] 开始消费 ${TASK_READY_QUEUE}（prefetch=${config.maxConcurrentTasks}）`)
+    logger.info(`开始消费 ${TASK_READY_QUEUE}`, { prefetch: config.maxConcurrentTasks })
   })
 
   async function handleMessage(ch: Channel, message: ConsumeMessage | null): Promise<void> {
     if (!message) {
       // broker 主动取消消费（如队列被删除），重连机制会恢复
-      console.error('[worker] 消费被 broker 取消')
+      logger.error('消费被 broker 取消')
       return
     }
 
@@ -83,7 +92,7 @@ export function startTaskConsumer(session: RabbitSession, producer: TaskProducer
     try {
       taskId = (JSON.parse(message.content.toString()) as { taskId?: string }).taskId
     } catch {
-      console.error('[worker] 消息体无法解析，已丢弃:', message.content.toString())
+      logger.error('消息体无法解析，已丢弃', { body: message.content.toString().slice(0, 500) })
       ch.ack(message)
       return
     }
@@ -97,8 +106,7 @@ export function startTaskConsumer(session: RabbitSession, producer: TaskProducer
       claim = await claimTaskForRun(taskId)
     } catch (error) {
       // DB 不可用：nack 重回队列，等 broker 重新投递
-      console.error(`[worker] 抢占任务 ${taskId} 失败（DB 异常），消息重回队列:`,
-        error instanceof Error ? error.message : error)
+      logger.error('抢占任务失败（DB 异常），消息重回队列', { taskId, error })
       ch.nack(message, false, true)
       return
     }
@@ -111,12 +119,12 @@ export function startTaskConsumer(session: RabbitSession, producer: TaskProducer
     const promise = (async () => {
       try {
         const outcome = await runClaimedTask(taskId, producer, config)
-        if (outcome === 'failed') console.warn(`[worker] 任务 ${taskId} 最终失败（已归档 DLQ）`)
-        else if (outcome === 'retried') console.warn(`[worker] 任务 ${taskId} 失败，已转入延迟重试队列`)
+        if (outcome === 'failed') logger.warn('任务最终失败（已归档 DLQ）', { taskId })
+        else if (outcome === 'retried') logger.warn('任务失败，已转入延迟重试队列', { taskId })
       } catch (error) {
         // runClaimedTask 内部已处理业务失败；这里是记账类异常，任务状态已非 pending，
         // ack 当前消息由 sweeper 心跳超时兜底回收，避免消息无限重投
-        console.error(`[worker] 任务 ${taskId} 处理过程发生意外异常:`, error)
+        logger.error('任务处理过程发生意外异常', { taskId, error })
       }
       try {
         ch.ack(message)
@@ -133,14 +141,18 @@ export function startTaskConsumer(session: RabbitSession, producer: TaskProducer
       if (channel && consumerTag) {
         try {
           await channel.cancel(consumerTag)
-        } catch { /* 通道可能已随连接断开 */ }
+        } catch {
+          /* 通道可能已随连接断开 */
+        }
       }
       const deadline = Date.now() + timeoutMs
       while (inFlight.size > 0 && Date.now() < deadline) {
         await Promise.race([Promise.allSettled(inFlight), sleepUntil(deadline)])
       }
       if (inFlight.size > 0) {
-        console.warn(`[worker] 优雅关闭超时，仍有 ${inFlight.size} 个任务在途，交由 broker 重投恢复`)
+        logger.warn('优雅关闭超时，仍有任务在途，交由 broker 重投恢复', {
+          inFlight: inFlight.size
+        })
       }
     }
   }
@@ -156,7 +168,11 @@ function sleepUntil(deadline: number): Promise<void> {
  * orchestrator 正常结束时自己会发 report_ready / task_completed 事件（经 sink 落库），
  * 失败时不会发终态事件，由这里补 error。
  */
-async function runClaimedTask(taskId: string, producer: TaskProducer, config: AppConfig): Promise<RunOutcome> {
+async function runClaimedTask(
+  taskId: string,
+  producer: TaskProducer,
+  config: AppConfig
+): Promise<RunOutcome> {
   const task = await getTask(taskId)
   if (!task) {
     await markTaskFailed(taskId)
@@ -169,14 +185,17 @@ async function runClaimedTask(taskId: string, producer: TaskProducer, config: Ap
   try {
     cached = await getReviewCache(cacheKey)
   } catch (cacheError) {
-    console.warn(`[worker] 缓存查询失败（忽略，走正常执行）:`, cacheError instanceof Error ? cacheError.message : cacheError)
+    logger.warn('缓存查询失败（忽略，走正常执行）', { taskId, error: cacheError })
   }
   if (cached) {
     const startedAt = Date.now()
     try {
       const reportContent = JSON.parse(cached.reportContent) as ReportContent
       await saveReport(taskId, reportContent, cached.score)
-      await appendTaskEvent(taskId, { type: 'agent_thought', message: '命中审查结果缓存，直接复用历史报告（相同代码/语言/模型）' })
+      await appendTaskEvent(taskId, {
+        type: 'agent_thought',
+        message: '命中审查结果缓存，直接复用历史报告（相同代码/语言/模型）'
+      })
       await appendTaskEvent(taskId, { type: 'report_ready', report: reportContent })
       await appendTaskEvent(taskId, { type: 'task_completed' })
       await updateTaskStatus(taskId, 'completed')
@@ -192,18 +211,21 @@ async function runClaimedTask(taskId: string, producer: TaskProducer, config: Ap
         durationMs: Date.now() - startedAt,
         cacheHit: true
       })
-      console.log(`[worker] 任务 ${taskId} 命中缓存（key=${cacheKey.slice(0, 12)}...），零成本完成`)
+      logger.info('任务命中缓存，零成本完成', { taskId, cacheKey: cacheKey.slice(0, 12) })
       return 'completed'
     } catch (error) {
       // 缓存数据损坏时退回正常执行
-      console.warn(`[worker] 缓存命中但回放失败（忽略，走正常执行）:`, error instanceof Error ? error.message : error)
+      logger.warn('缓存命中但回放失败（忽略，走正常执行）', { taskId, error })
     }
   }
 
   const priorAttempts = task.attemptCount ?? 0
   if (priorAttempts > 0) {
     await resetTaskArtifacts(taskId)
-    await appendTaskEvent(taskId, { type: 'task_retrying', message: `正在重试（第 ${priorAttempts + 1} 次尝试）...` })
+    await appendTaskEvent(taskId, {
+      type: 'task_retrying',
+      message: `正在重试（第 ${priorAttempts + 1} 次尝试）...`
+    })
   }
 
   const sink = createTaskEventSink(taskId)
@@ -221,7 +243,7 @@ async function runClaimedTask(taskId: string, producer: TaskProducer, config: Ap
       try {
         const current = await getTask(taskId)
         if (current?.status === 'cancelled' && !abortController.signal.aborted) {
-          console.log(`[worker] 任务 ${taskId} 收到取消指令，中止执行`)
+          logger.info('任务收到取消指令，中止执行', { taskId })
           abortController.abort()
         }
       } catch {
@@ -248,21 +270,24 @@ async function runClaimedTask(taskId: string, producer: TaskProducer, config: Ap
         abortController.signal
       )
       const results = Object.values(reportContent.agentResults || {})
-      const score = results.length > 0
-        ? Math.round(results.reduce((sum, r) => sum + r.score, 0) / results.length)
-        : 0
+      const score =
+        results.length > 0
+          ? Math.round(results.reduce((sum, r) => sum + r.score, 0) / results.length)
+          : 0
       await saveReport(taskId, reportContent, score)
       return reportContent
     })
     usage = traced.usage
-    fallbackReviewers = Object.values(traced.result.reviewStatus || {}).filter(s => s === 'fallback').length
+    fallbackReviewers = Object.values(traced.result.reviewStatus || {}).filter(
+      s => s === 'fallback'
+    ).length
     // 先把事件全部落库（含终态事件），再翻转 DB 状态，保证 SSE 回放/快照不超前于事件流
     await sink.flush()
     // 条件写入：若任务在收尾瞬间被取消，completeTask 抢不到则按取消结算（不覆盖用户意图）
     const completed = await completeTask(taskId)
     if (!completed) {
       runOutcome = 'cancelled'
-      console.log(`[worker] 任务 ${taskId} 完成时发现已被取消，报告保留但不改变取消状态`)
+      logger.info('任务完成时发现已被取消，报告保留但不改变取消状态', { taskId })
       return 'cancelled'
     }
     runOutcome = 'completed'
@@ -274,7 +299,7 @@ async function runClaimedTask(taskId: string, producer: TaskProducer, config: Ap
       model: llmClient.modelName,
       promptVersion: PROMPT_VERSION
     }).catch(cacheError => {
-      console.warn(`[worker] 结果写入缓存失败（不影响任务）:`, cacheError instanceof Error ? cacheError.message : cacheError)
+      logger.warn('结果写入缓存失败（不影响任务）', { taskId, error: cacheError })
     })
   } catch (error) {
     runError = error instanceof Error ? error.message : 'Unknown error'
@@ -286,7 +311,10 @@ async function runClaimedTask(taskId: string, producer: TaskProducer, config: Ap
     }
     const failedAttempts = priorAttempts + 1
     if (runOutcome === 'cancelled') {
-      await appendTaskEvent(taskId, { type: 'agent_thought', message: '已终止在途的模型调用，任务资源已释放' })
+      await appendTaskEvent(taskId, {
+        type: 'agent_thought',
+        message: '已终止在途的模型调用，任务资源已释放'
+      })
     } else if (decideRetry(failedAttempts, config.taskRetry.maxAttempts)) {
       await scheduleTaskRetry(taskId)
       await appendTaskEvent(taskId, {
@@ -304,7 +332,7 @@ async function runClaimedTask(taskId: string, producer: TaskProducer, config: Ap
       try {
         await producer.sendToDead(taskId, runError)
       } catch (dlqError) {
-        console.error(`[worker] 任务 ${taskId} 写入 DLQ 失败:`, dlqError instanceof Error ? dlqError.message : dlqError)
+        logger.error('任务写入 DLQ 失败', { taskId, error: dlqError })
       }
       runOutcome = 'failed'
     }
@@ -326,7 +354,7 @@ async function runClaimedTask(taskId: string, producer: TaskProducer, config: Ap
         error: runOutcome === 'completed' ? undefined : runError
       })
     } catch (metricError) {
-      console.error(`[worker] 任务 ${taskId} 指标落库失败:`, metricError instanceof Error ? metricError.message : metricError)
+      logger.error('任务指标落库失败', { taskId, error: metricError })
     }
   }
 

@@ -4,7 +4,7 @@ import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { detectLanguage } from '../utils/detectLanguage'
 
-const props = defineProps<{
+defineProps<{
   disabled: boolean
 }>()
 
@@ -85,11 +85,19 @@ async function handleFetchUrl() {
     if (extMatch) {
       const ext = extMatch[1].toLowerCase()
       const extMap: Record<string, string> = {
-        ts: 'typescript', tsx: 'typescript',
-        js: 'javascript', jsx: 'javascript',
-        py: 'python', java: 'java', go: 'go',
-        rs: 'rust', rb: 'ruby', cpp: 'cpp',
-        c: 'c', css: 'css', html: 'html'
+        ts: 'typescript',
+        tsx: 'typescript',
+        js: 'javascript',
+        jsx: 'javascript',
+        py: 'python',
+        java: 'java',
+        go: 'go',
+        rs: 'rust',
+        rb: 'ruby',
+        cpp: 'cpp',
+        c: 'c',
+        css: 'css',
+        html: 'html'
       }
       if (extMap[ext]) {
         language.value = extMap[ext]
@@ -152,15 +160,11 @@ function handleSubmit() {
           :value="lang.value"
         />
       </el-select>
-      <span v-if="detectedLang && detectedLang === language" class="auto-detect-badge">自动识别</span>
-      <span class="header-spacer"></span>
-      <el-button
-        v-if="code.trim()"
-        size="small"
-        type="default"
-        text
-        @click="clearCode"
+      <span v-if="detectedLang && detectedLang === language" class="auto-detect-badge"
+        >自动识别</span
       >
+      <span class="header-spacer"></span>
+      <el-button v-if="code.trim()" size="small" type="default" text @click="clearCode">
         清空
       </el-button>
     </div>
@@ -268,8 +272,14 @@ function handleSubmit() {
 }
 
 @keyframes badge-pop {
-  0% { opacity: 0; transform: scale(0.8); }
-  100% { opacity: 1; transform: scale(1); }
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .header-spacer {
@@ -322,7 +332,9 @@ function handleSubmit() {
   line-height: 1.7;
   max-height: 420px;
   border-radius: var(--radius-sm);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .code-textarea :deep(textarea):focus {

@@ -2,7 +2,6 @@ import { Memory } from './memory'
 import { runReActLoop } from './react-loop'
 import { getRolePrompt } from './roles/index'
 import { toolRegistry } from './tool-registry'
-import { llmClient } from './llm-client'
 import { getClientForRole } from './role-router'
 import { getRulesByDimension, scanCode } from '../tools/rules'
 import { createLogger } from '../logger'
@@ -99,9 +98,17 @@ async function runReviewer(
   onEvent({ type: 'agent_start', agentId: reviewerId, role, message: `开始审查 ${role} 维度` })
 
   const rolePrompt = getRolePrompt(role)
-  const reviewTools = toolRegistry.getDefinitions().filter(t =>
-    ['analyzeCode', 'checkPattern', 'checkComplexity', 'validateSyntax', 'retrieveCodingGuidelines'].includes(t.name)
-  )
+  const reviewTools = toolRegistry
+    .getDefinitions()
+    .filter(t =>
+      [
+        'analyzeCode',
+        'checkPattern',
+        'checkComplexity',
+        'validateSyntax',
+        'retrieveCodingGuidelines'
+      ].includes(t.name)
+    )
 
   // Automatic RAG retrieval: every reviewer receives relevant guidance before
   // ReAct starts, while the same tool remains available for focused follow-ups.
@@ -154,33 +161,49 @@ async function runReviewer(
     try {
       if (attempt > 0) {
         const delay = Math.pow(2, attempt) * 1000 // 2s, 4s
-        logger.info('ReAct loop 重试', { role, taskId, attempt: `${attempt}/${maxReActAttempts - 1}`, delay })
+        logger.info('ReAct loop 重试', {
+          role,
+          taskId,
+          attempt: `${attempt}/${maxReActAttempts - 1}`,
+          delay
+        })
         await new Promise(resolve => setTimeout(resolve, delay))
-        onEvent({ type: 'agent_thought', agentId: reviewerId, role, message: `LLM 调用失败，正在重试 (第 ${attempt} 次，共 ${maxReActAttempts - 1} 次)...` })
+        onEvent({
+          type: 'agent_thought',
+          agentId: reviewerId,
+          role,
+          message: `LLM 调用失败，正在重试 (第 ${attempt} 次，共 ${maxReActAttempts - 1} 次)...`
+        })
       }
 
       // ReAct loop — streaming collection of analysis
-      const result = await runReActLoop(rolePrompt, reviewTools, mem, (type, arg1, arg2) => {
-        if (type === 'thinking_token') {
-          onEvent({ type: 'thinking_token', agentId: reviewerId, role, message: arg1 as string })
-        } else if (type === 'thought') {
-          onEvent({ type: 'agent_thought', agentId: reviewerId, role, message: arg1 as string })
-        } else if (type === 'tool_call') {
-          onEvent({
-            type: 'tool_call',
-            agentId: reviewerId,
-            role,
-            toolName: arg1 as string,
-            input: arg2 as Record<string, unknown>
-          })
-          onEvent({
-            type: 'tool_result',
-            agentId: reviewerId,
-            role,
-            toolName: arg1 as string
-          })
-        }
-      }, { stream: true, client: getClientForRole(role), signal })
+      const result = await runReActLoop(
+        rolePrompt,
+        reviewTools,
+        mem,
+        (type, arg1, arg2) => {
+          if (type === 'thinking_token') {
+            onEvent({ type: 'thinking_token', agentId: reviewerId, role, message: arg1 as string })
+          } else if (type === 'thought') {
+            onEvent({ type: 'agent_thought', agentId: reviewerId, role, message: arg1 as string })
+          } else if (type === 'tool_call') {
+            onEvent({
+              type: 'tool_call',
+              agentId: reviewerId,
+              role,
+              toolName: arg1 as string,
+              input: arg2 as Record<string, unknown>
+            })
+            onEvent({
+              type: 'tool_result',
+              agentId: reviewerId,
+              role,
+              toolName: arg1 as string
+            })
+          }
+        },
+        { stream: true, client: getClientForRole(role), signal }
+      )
 
       if (attempt > 0) {
         logger.info('ReAct loop 重试成功', { role, taskId, succeededOnAttempt: attempt + 1 })
@@ -195,20 +218,31 @@ async function runReviewer(
 
       // Structured output parsing
       try {
-        const structured = await getClientForRole(role).chatStructured<{ issues: Issue[]; score: number }>(
-          [
-            { role: 'system', content: rolePrompt },
-            {
-              role: 'user',
-              content: `Based on your analysis, output the final review result as JSON with an "issues" array and numeric "score":\n\`\`\`\n${code}\n\`\`\`\n\nAnalysis summary:\n${result.substring(0, 2000)}`
-            }
-          ]
-        )
+        const structured = await getClientForRole(role).chatStructured<{
+          issues: Issue[]
+          score: number
+        }>([
+          { role: 'system', content: rolePrompt },
+          {
+            role: 'user',
+            content: `Based on your analysis, output the final review result as JSON with an "issues" array and numeric "score":\n\`\`\`\n${code}\n\`\`\`\n\nAnalysis summary:\n${result.substring(0, 2000)}`
+          }
+        ])
         if (!isValidIssueArray(structured)) {
           throw new Error('Structured output validation failed')
         }
-        onEvent({ type: 'agent_done', agentId: reviewerId, role, message: `${role} 审查完成（${structured.issues.length} 个问题）` })
-        logger.info('审查员完成', { role, taskId, issueCount: structured.issues.length, retryAttempts: attempt })
+        onEvent({
+          type: 'agent_done',
+          agentId: reviewerId,
+          role,
+          message: `${role} 审查完成（${structured.issues.length} 个问题）`
+        })
+        logger.info('审查员完成', {
+          role,
+          taskId,
+          issueCount: structured.issues.length,
+          retryAttempts: attempt
+        })
         return { ...structured, method: 'llm' as const }
       } catch {
         // Fallback: regex JSON extraction from raw result
@@ -224,29 +258,60 @@ async function runReviewer(
         } catch {
           // Final fallback: empty result
         }
-        onEvent({ type: 'agent_done', agentId: reviewerId, role, message: `${role} 审查完成（${parsed.issues.length} 个问题）` })
-        logger.info('审查员完成（结构化解析回退）', { role, taskId, issueCount: parsed.issues.length, retryAttempts: attempt })
+        onEvent({
+          type: 'agent_done',
+          agentId: reviewerId,
+          role,
+          message: `${role} 审查完成（${parsed.issues.length} 个问题）`
+        })
+        logger.info('审查员完成（结构化解析回退）', {
+          role,
+          taskId,
+          issueCount: parsed.issues.length,
+          retryAttempts: attempt
+        })
         return { ...parsed, method: 'llm' as const }
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error'
-      logger.warn('ReAct loop 执行失败', { role, taskId, attempt: attempt + 1, maxAttempts: maxReActAttempts, error: errorMsg })
+      logger.warn('ReAct loop 执行失败', {
+        role,
+        taskId,
+        attempt: attempt + 1,
+        maxAttempts: maxReActAttempts,
+        error: errorMsg
+      })
 
       // 还有重试机会，继续循环
       if (attempt < maxReActAttempts - 1) continue
 
       // 所有重试耗尽
-      logger.error('审查员执行失败，重试耗尽，回退到规则引擎', { role, taskId, totalAttempts: maxReActAttempts, error: errorMsg })
+      logger.error('审查员执行失败，重试耗尽，回退到规则引擎', {
+        role,
+        taskId,
+        totalAttempts: maxReActAttempts,
+        error: errorMsg
+      })
     }
   }
 
   // ═══════════════════════════════════════════════════════
   // P1: 降级到纯规则引擎回退（所有重试耗尽后）
   // ═══════════════════════════════════════════════════════
-  onEvent({ type: 'agent_thought', agentId: reviewerId, role, message: `LLM 调用失败（已重试 ${maxReActAttempts - 1} 次），回退到规则引擎分析...` })
+  onEvent({
+    type: 'agent_thought',
+    agentId: reviewerId,
+    role,
+    message: `LLM 调用失败（已重试 ${maxReActAttempts - 1} 次），回退到规则引擎分析...`
+  })
   try {
     const fallbackResult = runRuleOnlyReview(role, code, language)
-    onEvent({ type: 'agent_done', agentId: reviewerId, role, message: `${role} 审查完成（规则引擎回退，${fallbackResult.issues.length} 个问题）` })
+    onEvent({
+      type: 'agent_done',
+      agentId: reviewerId,
+      role,
+      message: `${role} 审查完成（规则引擎回退，${fallbackResult.issues.length} 个问题）`
+    })
     return { ...fallbackResult, method: 'rule-fallback' as const }
   } catch (fallbackError) {
     const errorMsg = fallbackError instanceof Error ? fallbackError.message : 'Unknown error'
@@ -256,7 +321,11 @@ async function runReviewer(
 }
 
 /** P1: 纯规则引擎降级审查（LLM 不可用时的回退） */
-function runRuleOnlyReview(role: AgentRole, code: string, language?: string): { issues: Issue[]; score: number } {
+function runRuleOnlyReview(
+  role: AgentRole,
+  code: string,
+  language?: string
+): { issues: Issue[]; score: number } {
   const dimensionMap: Record<string, string> = {
     security: 'security',
     performance: 'performance',
@@ -314,7 +383,15 @@ async function runReviewTask(
 
   // 用规则引擎做全维度预扫描（P0: 去占位符）
   const dimensions = ['security', 'performance', 'style', 'logic'] as const
-  const preScanResults: Record<string, { totalIssues: number; critical: number; warning: number; topIssues: { line: number; category: string; message: string }[] }> = {}
+  const preScanResults: Record<
+    string,
+    {
+      totalIssues: number
+      critical: number
+      warning: number
+      topIssues: { line: number; category: string; message: string }[]
+    }
+  > = {}
 
   for (const dim of dimensions) {
     const rules = getRulesByDimension(dim)
@@ -345,9 +422,9 @@ async function runReviewTask(
   // Step 2: Orchestrator ReAct loop (planning with real data)
   // ═══════════════════════════════════════════════════════
   const orchRole = getRolePrompt('orchestrator')
-  const orchTools = toolRegistry.getDefinitions().filter(t =>
-    ['decomposeTask', 'assignAgent'].includes(t.name)
-  )
+  const orchTools = toolRegistry
+    .getDefinitions()
+    .filter(t => ['decomposeTask', 'assignAgent'].includes(t.name))
 
   const orchMemory = new Memory()
   orchMemory.bindTask(taskId, `orchestrator-${taskId}`)
@@ -361,8 +438,9 @@ async function runReviewTask(
       `- Has file I/O: ${codeStats.hasFileIO}`,
       ``,
       `Rule engine pre-scan results:`,
-      ...Object.entries(preScanResults).map(([dim, r]) =>
-        `  ${dim}: ${r.totalIssues} issues (${r.critical} critical, ${r.warning} warning)`
+      ...Object.entries(preScanResults).map(
+        ([dim, r]) =>
+          `  ${dim}: ${r.totalIssues} issues (${r.critical} critical, ${r.warning} warning)`
       ),
       hotDims.length > 0
         ? `\nHot dimensions to prioritize: ${hotDims.map(([k]) => k).join(', ')}`
@@ -378,28 +456,34 @@ async function runReviewTask(
   if (signal?.aborted) {
     throw new Error('任务已取消')
   }
-  await runReActLoop(orchRole, orchTools, orchMemory, (type, arg1, arg2) => {
-    if (type === 'thinking_token') {
-      onEvent({ type: 'thinking_token', role: 'orchestrator', message: arg1 as string })
-    } else if (type === 'thought') {
-      planningNotes += (arg2 as string || arg1 as string || '') + '\n'
-      onEvent({ type: 'agent_thought', role: 'orchestrator', message: arg1 as string })
-    } else if (type === 'tool_call') {
-      onEvent({
-        type: 'tool_call',
-        role: 'orchestrator',
-        toolName: arg1 as string,
-        input: arg2 as Record<string, unknown>
-      })
-    } else if (type === 'tool_result') {
-      onEvent({
-        type: 'tool_result',
-        role: 'orchestrator',
-        toolName: arg1 as string,
-        output: typeof arg2 === 'string' ? arg2 : undefined
-      })
-    }
-  }, { stream: true })
+  await runReActLoop(
+    orchRole,
+    orchTools,
+    orchMemory,
+    (type, arg1, arg2) => {
+      if (type === 'thinking_token') {
+        onEvent({ type: 'thinking_token', role: 'orchestrator', message: arg1 as string })
+      } else if (type === 'thought') {
+        planningNotes += ((arg2 as string) || (arg1 as string) || '') + '\n'
+        onEvent({ type: 'agent_thought', role: 'orchestrator', message: arg1 as string })
+      } else if (type === 'tool_call') {
+        onEvent({
+          type: 'tool_call',
+          role: 'orchestrator',
+          toolName: arg1 as string,
+          input: arg2 as Record<string, unknown>
+        })
+      } else if (type === 'tool_result') {
+        onEvent({
+          type: 'tool_result',
+          role: 'orchestrator',
+          toolName: arg1 as string,
+          output: typeof arg2 === 'string' ? arg2 : undefined
+        })
+      }
+    },
+    { stream: true }
+  )
 
   // P4: 将编排器对话历史持久化到 DB，失败不影响审查流程
   try {
@@ -438,7 +522,7 @@ async function runReviewTask(
   }
 
   const settledResults = await Promise.allSettled(
-    reviewerRoles.map(async (role) => {
+    reviewerRoles.map(async role => {
       reviewerStartTimes[role] = performance.now()
       const context = buildPlanningContext(role)
       const result = await withReviewerSpan(role, () =>
@@ -461,7 +545,13 @@ async function runReviewTask(
       const { result } = r.value
       reviewerResults[role] = { issues: result.issues, score: result.score }
       reviewStatus[role] = result.method === 'rule-fallback' ? 'fallback' : 'success'
-      logger.info('审查员结果', { role, taskId, method: result.method, issues: result.issues.length, latencyMs: agentLatency.reviewers[role] })
+      logger.info('审查员结果', {
+        role,
+        taskId,
+        method: result.method,
+        issues: result.issues.length,
+        latencyMs: agentLatency.reviewers[role]
+      })
     } else {
       // 审查员彻底失败（重试耗尽且规则引擎也失败）
       reviewerResults[role] = { issues: [], score: 0 }
@@ -496,8 +586,8 @@ async function runReviewTask(
   }
 
   // 解析聚合结果
-  let mergedIssues: Issue[] = []
-  let overallScore = 0
+  let mergedIssues: Issue[]
+  let overallScore: number
   try {
     const parsed = JSON.parse(collectionResult)
     mergedIssues = (parsed.mergedIssues || []).map((i: Record<string, unknown>) => ({
@@ -512,7 +602,8 @@ async function runReviewTask(
     // 回退到简单合并
     mergedIssues = Object.values(reviewerResults).flatMap(r => r.issues)
     const scores = Object.values(reviewerResults).map(r => r.score)
-    overallScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0
+    overallScore =
+      scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0
   }
 
   // 使用 generateReport 工具生成最终报告

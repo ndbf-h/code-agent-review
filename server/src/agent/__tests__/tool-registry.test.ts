@@ -7,11 +7,11 @@ function createMockTool(name: string, result: string = 'mock result') {
     definition: {
       name,
       description: `Mock tool: ${name}`,
-      parameters: { input: { type: 'string', description: 'input' } },
+      parameters: { input: { type: 'string', description: 'input' } }
     } satisfies ToolDefinition,
     async execute(input: Record<string, unknown>): Promise<string> {
       return JSON.stringify({ result, input })
-    },
+    }
   }
 }
 
@@ -40,9 +40,9 @@ describe('ToolRegistry', () => {
   it('should throw when executing an unknown tool', async () => {
     const registry = new ToolRegistry()
 
-    await expect(
-      registry.execute({ id: '1', name: 'nonExistent', input: {} })
-    ).rejects.toThrow('Tool not found: nonExistent')
+    await expect(registry.execute({ id: '1', name: 'nonExistent', input: {} })).rejects.toThrow(
+      'Tool not found: nonExistent'
+    )
   })
 
   it('should return all definitions via getDefinitions', () => {

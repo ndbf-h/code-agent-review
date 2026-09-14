@@ -1,5 +1,8 @@
 import type { ReviewEvent } from '../agent/orchestrator'
 import { appendTaskEvent } from '../services/eventService'
+import { createLogger } from '../logger'
+
+const logger = createLogger('event-sink')
 
 const TOKEN_BATCH_WINDOW_MS = 300
 
@@ -23,7 +26,10 @@ export interface TaskEventSink {
  *    一条 thinking_token 事件（message 为拼接后的文本），事件量降两个数量级。
  *    非token事件入队前先冲刷缓冲，保证它排在之前产生的 token 之后。
  */
-export function createTaskEventSink(taskId: string, windowMs = TOKEN_BATCH_WINDOW_MS): TaskEventSink {
+export function createTaskEventSink(
+  taskId: string,
+  windowMs = TOKEN_BATCH_WINDOW_MS
+): TaskEventSink {
   const tokenBuffer = new Map<string, { agentId?: string; role: string; text: string }>()
   let flushTimer: NodeJS.Timeout | null = null
   let chain: Promise<void> = Promise.resolve()
@@ -32,7 +38,7 @@ export function createTaskEventSink(taskId: string, windowMs = TOKEN_BATCH_WINDO
   function enqueue(step: () => Promise<void>): void {
     chain = chain.then(step).catch(error => {
       // 事件落库失败只损失可观测性，不应中断审查本身
-      console.error(`[event-sink] 事件落库失败 (task=${taskId}):`, error instanceof Error ? error.message : error)
+      logger.error('事件落库失败', { taskId, error })
     })
   }
 
@@ -44,7 +50,7 @@ export function createTaskEventSink(taskId: string, windowMs = TOKEN_BATCH_WINDO
     if (tokenBuffer.size === 0) return
     const buffered = [...tokenBuffer.entries()]
     tokenBuffer.clear()
-    for (const [key, entry] of buffered) {
+    for (const [, entry] of buffered) {
       await appendTaskEvent(taskId, {
         type: 'thinking_token',
         agentId: entry.agentId,

@@ -56,7 +56,11 @@ const phaseIndex = computed(() => {
           <span class="phase-dot"></span>
           <span class="phase-label">{{ phase.label }}</span>
         </div>
-        <span v-if="i < phases.length - 1" class="phase-line" :class="{ done: i < phaseIndex }"></span>
+        <span
+          v-if="i < phases.length - 1"
+          class="phase-line"
+          :class="{ done: i < phaseIndex }"
+        ></span>
       </template>
     </div>
 
@@ -64,11 +68,13 @@ const phaseIndex = computed(() => {
     <div class="grid-summary">
       <span class="summary-dot" :class="{ active: workingCount > 0 || isQueued }"></span>
       <span class="summary-text">
-        {{ isQueued
-          ? '任务排队中，等待空闲执行位...'
-          : workingCount > 0
-            ? `${workingCount} 位专家工作中 · ${doneCount} 位已完成`
-            : `全部完成 · ${doneCount} 位专家` }}
+        {{
+          isQueued
+            ? '任务排队中，等待空闲执行位...'
+            : workingCount > 0
+              ? `${workingCount} 位专家工作中 · ${doneCount} 位已完成`
+              : `全部完成 · ${doneCount} 位专家`
+        }}
       </span>
     </div>
 
@@ -83,21 +89,65 @@ const phaseIndex = computed(() => {
         <div class="card-header">
           <span class="card-icon" :class="`icon-${slot.role}`">
             <!-- 安全盾牌 -->
-            <svg v-if="slot.role === 'security'" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <svg
+              v-if="slot.role === 'security'"
+              width="17"
+              height="17"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
               <path d="M12 3l7 3v5c0 4.6-3 7.7-7 9-4-1.3-7-4.4-7-9V6z" />
               <path d="M9.2 12.2l2 2 3.6-4.2" />
             </svg>
             <!-- 性能闪电 -->
-            <svg v-else-if="slot.role === 'performance'" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <svg
+              v-else-if="slot.role === 'performance'"
+              width="17"
+              height="17"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
               <path d="M13 2 5 13h5l-1 9 8-11h-5z" />
             </svg>
             <!-- 规范画笔 -->
-            <svg v-else-if="slot.role === 'style'" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <svg
+              v-else-if="slot.role === 'style'"
+              width="17"
+              height="17"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
               <path d="M14.5 3.5a3.5 3.5 0 0 1 5 5L9 19l-5 1 1-5z" />
               <path d="M13.5 5.5l5 5" />
             </svg>
             <!-- 逻辑芯片 -->
-            <svg v-else width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <svg
+              v-else
+              width="17"
+              height="17"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
               <rect x="7" y="7" width="10" height="10" rx="2" />
               <rect x="10" y="10" width="4" height="4" />
               <path d="M12 3v2M12 19v2M3 12h2M19 12h2" />
@@ -118,7 +168,11 @@ const phaseIndex = computed(() => {
         <div class="card-progress">
           <span
             class="progress-fill"
-            :class="{ indeterminate: slot.status === 'working', complete: slot.status === 'done', error: slot.status === 'error' }"
+            :class="{
+              indeterminate: slot.status === 'working',
+              complete: slot.status === 'done',
+              error: slot.status === 'error'
+            }"
           ></span>
         </div>
       </div>
@@ -196,8 +250,13 @@ const phaseIndex = computed(() => {
 }
 
 @keyframes pulse-dot {
-  0%, 100% { box-shadow: 0 0 0 3px var(--color-primary-light); }
-  50% { box-shadow: 0 0 0 6px var(--color-primary-light); }
+  0%,
+  100% {
+    box-shadow: 0 0 0 3px var(--color-primary-light);
+  }
+  50% {
+    box-shadow: 0 0 0 6px var(--color-primary-light);
+  }
 }
 
 .grid-summary {
@@ -234,10 +293,14 @@ const phaseIndex = computed(() => {
 }
 
 @media (max-width: 900px) {
-  .cards-grid { grid-template-columns: repeat(2, 1fr); }
+  .cards-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 @media (max-width: 500px) {
-  .cards-grid { grid-template-columns: 1fr; }
+  .cards-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .agent-card {
@@ -282,10 +345,22 @@ const phaseIndex = computed(() => {
   flex-shrink: 0;
 }
 
-.icon-security { color: var(--color-info-text); background: var(--color-info-bg); }
-.icon-performance { color: var(--color-warning-text); background: var(--color-warning-bg); }
-.icon-style { color: var(--color-accent); background: var(--color-accent-light); }
-.icon-logic { color: var(--color-success-text); background: var(--color-success-bg); }
+.icon-security {
+  color: var(--color-info-text);
+  background: var(--color-info-bg);
+}
+.icon-performance {
+  color: var(--color-warning-text);
+  background: var(--color-warning-bg);
+}
+.icon-style {
+  color: var(--color-accent);
+  background: var(--color-accent-light);
+}
+.icon-logic {
+  color: var(--color-success-text);
+  background: var(--color-success-bg);
+}
 
 .card-label {
   font-size: 13px;
@@ -315,10 +390,18 @@ const phaseIndex = computed(() => {
   animation: pulse-dot 1.6s ease-in-out infinite;
 }
 
-.status-done .status-dot { background: var(--color-success); }
-.status-error .status-dot { background: var(--color-danger); }
-.status-done { color: var(--color-success-text); }
-.status-error { color: var(--color-danger-text); }
+.status-done .status-dot {
+  background: var(--color-success);
+}
+.status-error .status-dot {
+  background: var(--color-danger);
+}
+.status-done {
+  color: var(--color-success-text);
+}
+.status-error {
+  color: var(--color-danger-text);
+}
 
 .card-body {
   font-size: 12.5px;
@@ -342,8 +425,13 @@ const phaseIndex = computed(() => {
 }
 
 @keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
 }
 
 /* ── 进度条 ── */
@@ -379,7 +467,11 @@ const phaseIndex = computed(() => {
 }
 
 @keyframes slide {
-  0% { transform: translateX(-120%); }
-  100% { transform: translateX(320%); }
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
 }
 </style>

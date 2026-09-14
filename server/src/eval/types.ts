@@ -21,7 +21,8 @@ export interface CodeReviewSample {
   expectedIssues: ExpectedIssue[]
 }
 
-export type RagQueryType = 'exact-english' | 'paraphrase-english' | 'chinese-only' | 'code-snippet' | 'dimension-filtered'
+export type RagQueryType =
+  'exact-english' | 'paraphrase-english' | 'chinese-only' | 'code-snippet' | 'dimension-filtered'
 
 export interface RagQuery {
   id: string

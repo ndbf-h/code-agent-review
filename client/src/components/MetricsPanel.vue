@@ -120,7 +120,9 @@ onUnmounted(() => {
             </div>
             <div class="token-item">
               <span class="token-label">Completion</span>
-              <span class="token-value">{{ formatTokens(metrics.tokenUsage.completionTokens) }}</span>
+              <span class="token-value">{{
+                formatTokens(metrics.tokenUsage.completionTokens)
+              }}</span>
             </div>
             <div class="token-item total">
               <span class="token-label">总计</span>
@@ -151,7 +153,9 @@ onUnmounted(() => {
             </div>
             <div class="latency-row">
               <span class="latency-label">报告生成</span>
-              <span class="latency-value">{{ formatMs(metrics.agentLatency.reportGeneration) }}</span>
+              <span class="latency-value">{{
+                formatMs(metrics.agentLatency.reportGeneration)
+              }}</span>
             </div>
             <div class="latency-row total">
               <span class="latency-label">总耗时</span>

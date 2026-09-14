@@ -19,7 +19,20 @@ function normalizeReport(data: Record<string, unknown>): ReviewReport {
       suggestion: i.suggestion as string
     })),
     score: (data.score as number) || 0,
-    agentResults: (data.agentResults as Record<string, { issues: Array<{ line: number; severity: 'critical' | 'warning' | 'suggestion'; category: string; message: string; suggestion: string }>; score: number }>) || {}
+    agentResults:
+      (data.agentResults as Record<
+        string,
+        {
+          issues: Array<{
+            line: number
+            severity: 'critical' | 'warning' | 'suggestion'
+            category: string
+            message: string
+            suggestion: string
+          }>
+          score: number
+        }
+      >) || {}
   }
 }
 
@@ -45,7 +58,7 @@ export function useSSE() {
     try {
       const res = await fetch(`${getApiBase()}/tasks/${taskId}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const detail = await res.json() as {
+      const detail = (await res.json()) as {
         task?: { status?: string }
         report?: { content?: Record<string, unknown> } | null
       }
@@ -107,9 +120,10 @@ export function useSSE() {
       currentTaskId = taskId
       lastSeq = 0
     }
-    const url = lastSeq > 0
-      ? `${getApiBase()}/tasks/${taskId}/stream?after=${lastSeq}`
-      : `${getApiBase()}/tasks/${taskId}/stream`
+    const url =
+      lastSeq > 0
+        ? `${getApiBase()}/tasks/${taskId}/stream?after=${lastSeq}`
+        : `${getApiBase()}/tasks/${taskId}/stream`
     eventSource = new EventSource(url)
 
     eventSource.onopen = () => {
@@ -118,7 +132,7 @@ export function useSSE() {
 
     const handlers: Record<string, (data: Record<string, unknown>) => void> = {
       // 连接快照：任务可能尚在队列中排队（pending），据此渲染排队态
-      task_state: (data) => {
+      task_state: data => {
         const status = data.status as TaskStatus | undefined
         if (!status) return
         store.setStatus(status)
@@ -127,7 +141,7 @@ export function useSSE() {
         }
       },
 
-      task_queued: (data) => {
+      task_queued: data => {
         store.setStatus('pending')
         store.addMessage({
           role: 'system',
@@ -136,7 +150,7 @@ export function useSSE() {
         })
       },
 
-      task_cancelled: (data) => {
+      task_cancelled: data => {
         store.setStatus('cancelled')
         store.loading = false
         store.addMessage({
@@ -146,7 +160,7 @@ export function useSSE() {
         })
       },
 
-      task_retrying: (data) => {
+      task_retrying: data => {
         store.setStatus('pending')
         store.addMessage({
           role: 'system',
@@ -155,7 +169,7 @@ export function useSSE() {
         })
       },
 
-      orchestrator_start: (data) => {
+      orchestrator_start: data => {
         store.setStatus('orchestrating')
         store.addMessage({
           role: 'orchestrator',
@@ -164,7 +178,7 @@ export function useSSE() {
         })
       },
 
-      agent_start: (data) => {
+      agent_start: data => {
         store.setStatus('reviewing')
         const role = (data.role as AgentRole) || 'security'
         store.upsertAgentSlot(role, {
@@ -173,27 +187,27 @@ export function useSSE() {
         })
       },
 
-      agent_thought: (data) => {
+      agent_thought: data => {
         const role = (data.role as AgentRole) || 'security'
         store.upsertAgentSlot(role, {
           latestMessage: (data.message as string) || '思考中...'
         })
       },
 
-      thinking_token: (data) => {
+      thinking_token: data => {
         const role = (data.role as AgentRole) || 'security'
         const token = (data.message as string) || ''
         store.appendToken(role, token)
       },
 
-      tool_call: (data) => {
+      tool_call: data => {
         const role = (data.role as AgentRole) || 'security'
         store.upsertAgentSlot(role, {
           latestMessage: `工具：${data.toolName || '...'}`
         })
       },
 
-      agent_done: (data) => {
+      agent_done: data => {
         const role = (data.role as AgentRole) || 'security'
         store.upsertAgentSlot(role, {
           status: 'done',
@@ -205,7 +219,7 @@ export function useSSE() {
         store.setStatus('summarizing')
       },
 
-      report_ready: (data) => {
+      report_ready: data => {
         store.setStatus('completed')
         const report = data.report as Record<string, unknown> | undefined
         if (report) {
@@ -223,7 +237,7 @@ export function useSSE() {
         store.loading = false
       },
 
-      error: (data) => {
+      error: data => {
         if (!data || typeof data !== 'object') return
         const agentId = data.agentId as string | undefined
         const message = (data.message as string) || '未知错误'

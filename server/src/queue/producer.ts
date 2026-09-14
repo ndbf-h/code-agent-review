@@ -1,5 +1,11 @@
 import type { ConfirmChannel } from 'amqplib'
-import { TASK_EXCHANGE, TASK_ROUTING_KEY, TASK_RETRY_QUEUE, DLX_EXCHANGE, type RabbitSession } from './rabbit'
+import {
+  TASK_EXCHANGE,
+  TASK_ROUTING_KEY,
+  TASK_RETRY_QUEUE,
+  DLX_EXCHANGE,
+  type RabbitSession
+} from './rabbit'
 
 export interface TaskProducer {
   /** 新任务入队（主交换机 → ready 队列） */

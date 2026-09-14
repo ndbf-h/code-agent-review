@@ -1,7 +1,7 @@
 import { llmClient, type LlmClient } from './llm-client'
 import { toolRegistry } from './tool-registry'
 import { Memory } from './memory'
-import type { ToolDefinition, StreamChunk } from './types'
+import type { ToolDefinition } from './types'
 import { createLogger } from '../logger'
 
 const logger = createLogger('react-loop')

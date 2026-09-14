@@ -26,7 +26,10 @@ export interface ParsedRoleModels {
 }
 
 /** 解析 ROLE_MODELS 配置字符串（纯函数，便于单测） */
-export function parseRoleModels(raw: string | undefined, env: Record<string, string | undefined> = process.env): ParsedRoleModels {
+export function parseRoleModels(
+  raw: string | undefined,
+  env: Record<string, string | undefined> = process.env
+): ParsedRoleModels {
   if (!raw) return {}
   const result: ParsedRoleModels = {}
   for (const entry of raw.split(',')) {
@@ -38,7 +41,7 @@ export function parseRoleModels(raw: string | undefined, env: Record<string, str
       continue
     }
     const role = trimmed.slice(0, eq).trim()
-    let model = trimmed.slice(eq + 1).trim()
+    const model = trimmed.slice(eq + 1).trim()
     if (!role || !model) continue
 
     const spec: RoleRouteSpec = { model }

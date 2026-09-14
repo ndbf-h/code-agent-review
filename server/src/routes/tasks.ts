@@ -1,7 +1,22 @@
 import { Router, type Request, type Response, type NextFunction } from 'express'
 import { ValidationError, TaskError } from '../errors'
 import { createTask, createAgentsForTask, getTaskDetail } from '../services/taskService'
-import { listTasks, countTasks, getTask, getTaskEventsAfter, markTaskFailed, getReportByTask, getConversationMessages, insertConversationMessage, insertCodeVersion, linkCodeVersionToReview, aggregateTaskMetrics, recentTaskFailures, getReviewCacheStats, cancelTask } from '../db/queries'
+import {
+  listTasks,
+  countTasks,
+  getTask,
+  getTaskEventsAfter,
+  markTaskFailed,
+  getReportByTask,
+  getConversationMessages,
+  insertConversationMessage,
+  insertCodeVersion,
+  linkCodeVersionToReview,
+  aggregateTaskMetrics,
+  recentTaskFailures,
+  getReviewCacheStats,
+  cancelTask
+} from '../db/queries'
 import { getAgentLatency, resetAgentLatency } from '../agent/orchestrator'
 import type { ReviewEvent } from '../agent/orchestrator'
 import { applyFixes } from '../tools/fix'
@@ -11,12 +26,41 @@ import { getTokenUsage, getRequestCount, resetTokenUsage } from '../agent/llm-cl
 import { resolveAndCheckIp as resolveAndCheckIpSafe } from '../utils/urlSafety'
 import { streamAssistantReply } from '../services/assistantService'
 import { addGuidelineDocument } from '../services/knowledgeService'
-import { subscribeTaskEvents, appendTaskEvent, type StoredTaskEvent } from '../services/eventService'
+import {
+  subscribeTaskEvents,
+  appendTaskEvent,
+  type StoredTaskEvent
+} from '../services/eventService'
 import type { TaskProducer } from '../queue/producer'
 import { v4 as uuidv4 } from 'uuid'
+import { getConfig } from '../config'
+import { createLogger } from '../logger'
+import { validate, getValidated } from '../validation/middleware'
+import {
+  taskIdParamsSchema,
+  createTaskBodySchema,
+  listTasksQuerySchema,
+  chatBodySchema,
+  versionBodySchema,
+  guidelineBodySchema,
+  fixBodySchema,
+  fetchUrlBodySchema,
+  type CreateTaskBody,
+  type ListTasksQuery,
+  type ChatBody,
+  type VersionBody,
+  type GuidelineBody,
+  type FixBody,
+  type FetchUrlBody
+} from '../validation/schemas'
+
+const logger = createLogger('tasks')
 
 const tasksRouter = Router()
 const metricsRouter = Router()
+
+/** 所有 /:id 路径参数统一要求 UUID */
+const withTaskId = validate({ params: taskIdParamsSchema })
 
 /** SSE 心跳间隔：定时发送注释行，防止代理按空闲超时断开长连接 */
 const SSE_HEARTBEAT_INTERVAL_MS = 20_000
@@ -37,9 +81,11 @@ function startSseHeartbeat(res: Response): ReturnType<typeof setInterval> {
 
 /** 终态事件：task_completed / task_cancelled，或无 agentId 的全局 error（带 agentId 的 error 只是单个审查员失败） */
 function isTerminalEvent(event: { type: string; agentId?: string }): boolean {
-  return event.type === 'task_completed'
-    || event.type === 'task_cancelled'
-    || (event.type === 'error' && !event.agentId)
+  return (
+    event.type === 'task_completed' ||
+    event.type === 'task_cancelled' ||
+    (event.type === 'error' && !event.agentId)
+  )
 }
 
 let taskProducer: TaskProducer | null = null
@@ -55,78 +101,86 @@ function requireProducer(): TaskProducer {
 }
 
 // POST /api/tasks
-tasksRouter.post('/', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { code, language, title, scopeId, sourceVersionId } = req.body
-
-    if (!code || !language) {
-      throw new ValidationError('code 和 language 为必填项')
-    }
-
-    const task = await createTask(code, language, title, typeof scopeId === 'string' ? scopeId : undefined)
-    await createAgentsForTask(task.id)
-    if (typeof sourceVersionId === 'string') await linkCodeVersionToReview(sourceVersionId, task.id)
-
-    await appendTaskEvent(task.id, { type: 'task_queued', message: '任务已创建，进入审查队列' })
+tasksRouter.post(
+  '/',
+  validate({ body: createTaskBodySchema }),
+  async (req: Request, res: Response, next: NextFunction) => {
     try {
-      await requireProducer().publishTask(task.id)
-    } catch (error) {
-      // publisher confirm 失败说明 broker 未收到消息：任务标记失败并明确告知调用方
-      console.error('[tasks] 任务入队失败:', error instanceof Error ? error.message : error)
-      await markTaskFailed(task.id)
-      await appendTaskEvent(task.id, { type: 'error', message: '消息队列暂不可用，任务未能入队' }).catch(() => undefined)
-      res.status(502).json({ error: '消息队列暂不可用，请稍后重试', code: 'QUEUE_UNAVAILABLE' })
-      return
-    }
+      // reviewConfig 目前仅校验形状（REQ-04），落库并生效由 REQ-14（批次 7）实现
+      const { code, language, title, scopeId, sourceVersionId } = req.body as CreateTaskBody
 
-    res.status(201).json(task)
-  } catch (error) {
-    next(error)
+      const task = await createTask(code, language, title, scopeId)
+      await createAgentsForTask(task.id)
+      if (sourceVersionId) await linkCodeVersionToReview(sourceVersionId, task.id)
+
+      await appendTaskEvent(task.id, { type: 'task_queued', message: '任务已创建，进入审查队列' })
+      try {
+        await requireProducer().publishTask(task.id)
+      } catch (error) {
+        // publisher confirm 失败说明 broker 未收到消息：任务标记失败并明确告知调用方
+        logger.error('任务入队失败', { taskId: task.id, error })
+        await markTaskFailed(task.id)
+        await appendTaskEvent(task.id, {
+          type: 'error',
+          message: '消息队列暂不可用，任务未能入队'
+        }).catch(() => undefined)
+        res.status(502).json({ error: '消息队列暂不可用，请稍后重试', code: 'QUEUE_UNAVAILABLE' })
+        return
+      }
+
+      res.status(201).json(task)
+    } catch (error) {
+      next(error)
+    }
   }
-})
+)
 
 // POST /api/tasks/:id/cancel — 取消排队中/执行中的审查任务
-tasksRouter.post('/:id/cancel', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const taskId = req.params.id
-    const task = await getTask(taskId)
-    if (!task) {
-      throw new TaskError('Task not found', 'TASK_NOT_FOUND', 404)
+tasksRouter.post(
+  '/:id/cancel',
+  withTaskId,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const taskId = req.params.id
+      const task = await getTask(taskId)
+      if (!task) {
+        throw new TaskError('Task not found', 'TASK_NOT_FOUND', 404)
+      }
+      // 原子条件更新：与终态写入互斥，抢不到说明任务已结束
+      const cancelled = await cancelTask(taskId)
+      if (!cancelled) {
+        res.status(409).json({
+          error: `任务已结束（当前状态：${task.status}），无法取消`,
+          code: 'TASK_NOT_CANCELLABLE'
+        })
+        return
+      }
+      await appendTaskEvent(taskId, { type: 'task_cancelled', message: '任务已被用户取消' })
+      res.json({ id: taskId, status: 'cancelled' })
+    } catch (error) {
+      next(error)
     }
-    // 原子条件更新：与终态写入互斥，抢不到说明任务已结束
-    const cancelled = await cancelTask(taskId)
-    if (!cancelled) {
-      res.status(409).json({
-        error: `任务已结束（当前状态：${task.status}），无法取消`,
-        code: 'TASK_NOT_CANCELLABLE'
-      })
-      return
-    }
-    await appendTaskEvent(taskId, { type: 'task_cancelled', message: '任务已被用户取消' })
-    res.json({ id: taskId, status: 'cancelled' })
-  } catch (error) {
-    next(error)
   }
-})
+)
 
 // GET /api/tasks?limit=&offset=&status= 列表
-tasksRouter.get('/', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 20, 1), 100)
-    const offset = Math.max(parseInt(req.query.offset as string) || 0, 0)
-    const statusParam = req.query.status as string | undefined
-    const validStatuses: TaskStatus[] = ['pending', 'orchestrating', 'reviewing', 'summarizing', 'completed', 'failed', 'cancelled']
-    const status = validStatuses.includes(statusParam as TaskStatus) ? statusParam as TaskStatus : undefined
-    const tasks = await listTasks(limit, offset, status)
-    const total = await countTasks(status)
-    res.json({ tasks, total, limit, offset })
-  } catch (error) {
-    next(error)
+tasksRouter.get(
+  '/',
+  validate({ query: listTasksQuerySchema }),
+  async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { limit, offset, status } = getValidated<unknown, ListTasksQuery>(res).query
+      const tasks = await listTasks(limit, offset, status as TaskStatus | undefined)
+      const total = await countTasks(status as TaskStatus | undefined)
+      res.json({ tasks, total, limit, offset })
+    } catch (error) {
+      next(error)
+    }
   }
-})
+)
 
 // GET /api/tasks/:id
-tasksRouter.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
+tasksRouter.get('/:id', withTaskId, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const detail = await getTaskDetail(req.params.id)
     if (!detail.task) {
@@ -139,145 +193,155 @@ tasksRouter.get('/:id', async (req: Request, res: Response, next: NextFunction) 
 })
 
 // POST /api/tasks/:id/chat/stream - discuss a completed review with the assistant
-tasksRouter.post('/:id/chat/stream', async (req: Request, res: Response) => {
-  const taskId = req.params.id
-  const userMessage = typeof req.body?.message === 'string' ? req.body.message.trim() : ''
+tasksRouter.post(
+  '/:id/chat/stream',
+  validate({ params: taskIdParamsSchema, body: chatBodySchema }),
+  async (req: Request, res: Response) => {
+    const taskId = req.params.id
+    const { message: userMessage } = req.body as ChatBody
 
-  if (!userMessage) {
-    res.status(400).json({ error: 'message is required', code: 'VALIDATION_ERROR' })
-    return
-  }
+    const task = await getTask(taskId)
+    const report = await getReportByTask(taskId)
+    if (!task || !report) {
+      res.status(404).json({ error: 'Completed review not found', code: 'TASK_NOT_FOUND' })
+      return
+    }
 
-  const task = await getTask(taskId)
-  const report = await getReportByTask(taskId)
-  if (!task || !report) {
-    res.status(404).json({ error: 'Completed review not found', code: 'TASK_NOT_FOUND' })
-    return
-  }
+    let reportContent: ReportContent
+    try {
+      reportContent = JSON.parse(report.content) as ReportContent
+    } catch {
+      res.status(500).json({ error: 'Review report is invalid', code: 'REPORT_INVALID' })
+      return
+    }
 
-  let reportContent: ReportContent
-  try {
-    reportContent = JSON.parse(report.content) as ReportContent
-  } catch {
-    res.status(500).json({ error: 'Review report is invalid', code: 'REPORT_INVALID' })
-    return
-  }
-
-  const history = await getConversationMessages(taskId)
-  await insertConversationMessage({
-    id: uuidv4(),
-    taskId,
-    role: 'user',
-    content: userMessage,
-    createdAt: new Date().toISOString()
-  })
-
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive',
-    'X-Accel-Buffering': 'no',
-    'Access-Control-Allow-Origin': '*'
-  })
-  startSseHeartbeat(res)
-
-  const sendEvent = (event: string, data: unknown) => {
-    if (res.writableEnded || res.destroyed) return
-    res.write(`event: ${event}\n`)
-    res.write(`data: ${JSON.stringify(data)}\n\n`)
-  }
-
-  try {
-    const result = await streamAssistantReply(task, reportContent, history, userMessage, event => {
-      sendEvent(event.type, event)
-    })
+    const history = await getConversationMessages(taskId)
     await insertConversationMessage({
       id: uuidv4(),
       taskId,
-      role: 'assistant',
-      content: result.reply,
+      role: 'user',
+      content: userMessage,
       createdAt: new Date().toISOString()
     })
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Assistant request failed'
-    sendEvent('error', { message })
-  } finally {
-    res.end()
+
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no'
+    })
+    startSseHeartbeat(res)
+
+    const sendEvent = (event: string, data: unknown) => {
+      if (res.writableEnded || res.destroyed) return
+      res.write(`event: ${event}\n`)
+      res.write(`data: ${JSON.stringify(data)}\n\n`)
+    }
+
+    try {
+      const result = await streamAssistantReply(
+        task,
+        reportContent,
+        history,
+        userMessage,
+        event => {
+          sendEvent(event.type, event)
+        }
+      )
+      await insertConversationMessage({
+        id: uuidv4(),
+        taskId,
+        role: 'assistant',
+        content: result.reply,
+        createdAt: new Date().toISOString()
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Assistant request failed'
+      sendEvent('error', { message })
+    } finally {
+      res.end()
+    }
   }
-})
+)
 
 // POST /api/tasks/:id/versions - accept an assistant-generated code version
-tasksRouter.post('/:id/versions', async (req: Request, res: Response) => {
-  const taskId = req.params.id
-  const { code, language, summary } = req.body || {}
-  if (typeof code !== 'string' || !code.trim() || typeof language !== 'string') {
-    res.status(400).json({ error: 'code and language are required', code: 'VALIDATION_ERROR' })
-    return
+tasksRouter.post(
+  '/:id/versions',
+  validate({ params: taskIdParamsSchema, body: versionBodySchema }),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const taskId = req.params.id
+      const { code, language, summary } = req.body as VersionBody
+      const task = await getTask(taskId)
+      if (!task) {
+        throw new TaskError('Task not found', 'TASK_NOT_FOUND', 404)
+      }
+      const version = {
+        id: uuidv4(),
+        taskId,
+        code,
+        language,
+        source: 'assistant',
+        summary: summary ?? '',
+        createdAt: new Date().toISOString()
+      }
+      await insertCodeVersion(version)
+      res.status(201).json({ version })
+    } catch (error) {
+      next(error)
+    }
   }
-  const task = await getTask(taskId)
-  if (!task) {
-    res.status(404).json({ error: 'Task not found', code: 'TASK_NOT_FOUND' })
-    return
-  }
-  const version = {
-    id: uuidv4(),
-    taskId,
-    code,
-    language,
-    source: 'assistant',
-    summary: typeof summary === 'string' ? summary : '',
-    createdAt: new Date().toISOString()
-  }
-  await insertCodeVersion(version)
-  res.status(201).json({ version })
-})
+)
 
 // POST /api/tasks/:id/guidelines - add a task/project-scoped coding standard
-tasksRouter.post('/:id/guidelines', async (req: Request, res: Response) => {
-  const task = await getTask(req.params.id)
-  if (!task) {
-    res.status(404).json({ error: 'Task not found', code: 'TASK_NOT_FOUND' })
-    return
+tasksRouter.post(
+  '/:id/guidelines',
+  validate({ params: taskIdParamsSchema, body: guidelineBodySchema }),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const task = await getTask(req.params.id)
+      if (!task) {
+        throw new TaskError('Task not found', 'TASK_NOT_FOUND', 404)
+      }
+      const { fileName, content, language, dimension } = req.body as GuidelineBody
+      try {
+        const result = await addGuidelineDocument({
+          scopeId: task.scopeId,
+          fileName,
+          content,
+          language: language ?? '',
+          dimension: dimension ?? ''
+        })
+        res.status(201).json({ ...result, scopeId: task.scopeId })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Guideline upload failed'
+        res.status(400).json({ error: message, code: 'GUIDELINE_INVALID' })
+      }
+    } catch (error) {
+      next(error)
+    }
   }
-  const { fileName, content, language, dimension } = req.body || {}
-  if (typeof fileName !== 'string' || typeof content !== 'string') {
-    res.status(400).json({ error: 'fileName and content are required', code: 'VALIDATION_ERROR' })
-    return
-  }
-  try {
-    const result = await addGuidelineDocument({
-      scopeId: task.scopeId,
-      fileName,
-      content,
-      language: typeof language === 'string' ? language : '',
-      dimension: typeof dimension === 'string' ? dimension : ''
-    })
-    res.status(201).json({ ...result, scopeId: task.scopeId })
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Guideline upload failed'
-    res.status(400).json({ error: message, code: 'GUIDELINE_INVALID' })
-  }
-})
+)
 
 // GET /api/tasks/:id/stream — 订阅任务事件流（回放 + 实时推送，不再触发执行）
-tasksRouter.get('/:id/stream', async (req: Request, res: Response) => {
+tasksRouter.get('/:id/stream', withTaskId, async (req: Request, res: Response) => {
   const taskId = req.params.id
 
   // 续传位点：浏览器 EventSource 自动重连带 Last-Event-Id 头；本服务手动重连用 ?after=
   const lastEventId = req.headers['last-event-id']
-  const afterRaw = (Array.isArray(lastEventId) ? lastEventId[0] : lastEventId)
-    || (typeof req.query.after === 'string' ? req.query.after : '')
+  const afterRaw =
+    (Array.isArray(lastEventId) ? lastEventId[0] : lastEventId) ||
+    (typeof req.query.after === 'string' ? req.query.after : '')
   let lastSeq = parseInt(afterRaw, 10)
   if (!Number.isFinite(lastSeq) || lastSeq < 0) lastSeq = 0
 
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive',
-    'X-Accel-Buffering': 'no',
-    'Access-Control-Allow-Origin': '*'
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no'
   })
-  const heartbeat = startSseHeartbeat(res)
+  startSseHeartbeat(res)
 
   function sendEvent(event: string, data: unknown, seq?: number): void {
     if (res.writableEnded || res.destroyed) return
@@ -381,73 +445,74 @@ tasksRouter.get('/:id/stream', async (req: Request, res: Response) => {
 })
 
 // POST /api/tasks/:id/fix — 自动修复代码
-tasksRouter.post('/:id/fix', async (req, res) => {
-  try {
-    const { id } = req.params
-    const { code: bodyCode, language: bodyLanguage } = req.body
-
-    // 1. 查询 task
-    const task = await getTask(id)
-    if (!task) {
-      res.status(404).json({ error: 'Task not found' })
-      return
-    }
-
-    // 2. 获取代码和语言（body 优先，fallback 到 task）
-    const code = bodyCode || task.codeSnippet
-    const language = bodyLanguage || task.language
-
-    if (!code) {
-      res.status(400).json({ error: 'code 为必填项' })
-      return
-    }
-
-    // 3. 从 report 获取 issues
-    const report = await getReportByTask(id)
-    if (!report) {
-      res.status(400).json({ error: '该任务尚未完成审查，没有可用的 issues' })
-      return
-    }
-
-    let issues: Issue[] = []
+tasksRouter.post(
+  '/:id/fix',
+  validate({ params: taskIdParamsSchema, body: fixBodySchema }),
+  async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const reportContent = JSON.parse(report.content) as ReportContent
-      issues = reportContent.issues || []
-    } catch {
-      res.status(500).json({ error: '解析审查报告失败' })
-      return
+      const { id } = req.params
+      const { code: bodyCode, language: bodyLanguage } = req.body as FixBody
+
+      // 1. 查询 task
+      const task = await getTask(id)
+      if (!task) {
+        throw new TaskError('Task not found', 'TASK_NOT_FOUND', 404)
+      }
+
+      // 2. 获取代码和语言（body 优先，fallback 到 task）
+      const code = bodyCode || task.codeSnippet
+      const language = bodyLanguage || task.language
+
+      if (!code) {
+        throw new ValidationError('code 为必填项（任务无代码快照时必须在请求体提供）')
+      }
+
+      // 3. 从 report 获取 issues
+      const report = await getReportByTask(id)
+      if (!report) {
+        throw new TaskError('该任务尚未完成审查，没有可用的 issues', 'REPORT_NOT_READY', 400)
+      }
+
+      let issues: Issue[] = []
+      try {
+        const reportContent = JSON.parse(report.content) as ReportContent
+        issues = reportContent.issues || []
+      } catch {
+        throw new TaskError('解析审查报告失败', 'REPORT_INVALID', 500)
+      }
+
+      if (issues.length === 0) {
+        throw new TaskError('审查报告中没有发现 issues，无需修复', 'NO_ISSUES_TO_FIX', 400)
+      }
+
+      // 4. 调用 applyFixes 工具生成修复代码
+      const resultJson = await applyFixes.execute({
+        code,
+        language,
+        issues: JSON.stringify(issues)
+      })
+      const result = JSON.parse(resultJson) as {
+        fixedCode: string
+        changes: FixChange[]
+        error?: string
+      }
+
+      // 5. LLM 调用失败返回 502（上游模型服务问题）
+      if (result.error) {
+        throw new TaskError(result.error, 'FIX_FAILED', 502)
+      }
+
+      // 6. 返回修复结果
+      res.json({
+        originalCode: code,
+        fixedCode: result.fixedCode,
+        changes: result.changes
+      })
+    } catch (error) {
+      next(error)
     }
-
-    if (issues.length === 0) {
-      res.status(400).json({ error: '审查报告中没有发现 issues，无需修复' })
-      return
-    }
-
-    // 4. 调用 applyFixes 工具生成修复代码
-    const resultJson = await applyFixes.execute({
-      code,
-      language,
-      issues: JSON.stringify(issues)
-    })
-    const result = JSON.parse(resultJson) as { fixedCode: string; changes: FixChange[]; error?: string }
-
-    // 5. LLM 调用失败返回 500
-    if (result.error) {
-      res.status(500).json({ error: result.error })
-      return
-    }
-
-    // 6. 返回修复结果
-    res.json({
-      originalCode: code,
-      fixedCode: result.fixedCode,
-      changes: result.changes
-    })
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error'
-    res.status(500).json({ error: message })
   }
-})
+)
 
 // POST /api/tasks/fetch-url — 抓取 URL 代码内容
 
@@ -479,8 +544,9 @@ async function fetchWithRedirectCheck(
   const fetchRes = await fetch(url, {
     signal: controller.signal,
     headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-      'Accept': 'text/plain,text/html;q=0.5'
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+      Accept: 'text/plain,text/html;q=0.5'
     },
     redirect: 'manual'
   })
@@ -499,95 +565,88 @@ async function fetchWithRedirectCheck(
   return fetchRes
 }
 
-tasksRouter.post('/fetch-url', async (req: Request, res: Response) => {
-  try {
-    const { url } = req.body
-
-    if (!url || typeof url !== 'string') {
-      res.status(400).json({ error: '请提供有效的 URL' })
-      return
-    }
-
-    // 协议校验
-    let parsed: URL
+tasksRouter.post(
+  '/fetch-url',
+  validate({ body: fetchUrlBodySchema }),
+  async (req: Request, res: Response, next: NextFunction) => {
     try {
-      parsed = new URL(url)
-    } catch {
-      res.status(400).json({ error: 'URL 格式不正确' })
-      return
-    }
+      const { url } = req.body as FetchUrlBody
+      const parsed = new URL(url)
 
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      res.status(400).json({ error: '仅支持 http/https 链接' })
-      return
-    }
-
-    // DNS 解析 + IP 校验（防止 SSRF 访问内网）
-    try {
-      await resolveAndCheckIpSafe(parsed.hostname)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'IP 校验失败'
-      res.status(400).json({ error: message })
-      return
-    }
-
-    // 抓取内容，10 秒超时，手动处理重定向
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 10_000)
-
-    let fetchRes: globalThis.Response
-    try {
-      fetchRes = await fetchWithRedirectCheck(url, controller, 0)
-    } catch (err) {
-      clearTimeout(timeout)
-      if (err instanceof Error && err.name === 'AbortError') {
-        res.status(408).json({ error: '请求超时，请检查链接是否可访问' })
+      // DNS 解析 + IP 校验（防止 SSRF 访问内网）
+      try {
+        await resolveAndCheckIpSafe(parsed.hostname)
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'IP 校验失败'
+        res.status(400).json({ error: message, code: 'URL_BLOCKED' })
         return
       }
-      const message = err instanceof Error ? err.message : '网络请求失败'
-      res.status(502).json({ error: message })
-      return
-    }
-    clearTimeout(timeout)
 
-    if (!fetchRes.ok) {
-      if (fetchRes.status >= 500) {
-        res.status(502).json({ error: `目标服务器异常（${fetchRes.status}）` })
-      } else {
-        res.status(502).json({ error: `目标服务器拒绝访问（${fetchRes.status}）` })
+      // 抓取内容，10 秒超时，手动处理重定向
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 10_000)
+
+      let fetchRes: globalThis.Response
+      try {
+        fetchRes = await fetchWithRedirectCheck(url, controller, 0)
+      } catch (err) {
+        clearTimeout(timeout)
+        if (err instanceof Error && err.name === 'AbortError') {
+          res.status(408).json({ error: '请求超时，请检查链接是否可访问', code: 'FETCH_TIMEOUT' })
+          return
+        }
+        const message = err instanceof Error ? err.message : '网络请求失败'
+        res.status(502).json({ error: message, code: 'FETCH_FAILED' })
+        return
       }
-      return
+      clearTimeout(timeout)
+
+      if (!fetchRes.ok) {
+        const reason =
+          fetchRes.status >= 500
+            ? `目标服务器异常（${fetchRes.status}）`
+            : `目标服务器拒绝访问（${fetchRes.status}）`
+        res.status(502).json({ error: reason, code: 'FETCH_UPSTREAM_ERROR' })
+        return
+      }
+
+      // 检查 Content-Type，过滤明显非文本的响应
+      const contentType = fetchRes.headers.get('content-type') || ''
+      if (
+        contentType.includes('application/octet-stream') ||
+        contentType.includes('video/') ||
+        contentType.includes('audio/') ||
+        contentType.includes('image/')
+      ) {
+        res
+          .status(400)
+          .json({ error: '该链接不是文本文件，无法读取代码', code: 'CONTENT_NOT_TEXT' })
+        return
+      }
+
+      // 读取内容，上限与单次审查代码上限一致（MAX_CODE_CHARS）
+      const maxChars = getConfig().http.maxCodeChars
+      const text = await fetchRes.text()
+      if (text.length > maxChars) {
+        res.status(400).json({
+          error: `文件过大（超过 ${maxChars} 字符），请手动粘贴代码`,
+          code: 'CONTENT_TOO_LARGE'
+        })
+        return
+      }
+
+      const lineCount = text.trimEnd().split('\n').length || 1
+
+      res.json({
+        content: text,
+        byteSize: Buffer.byteLength(text, 'utf8'),
+        lineCount
+      })
+    } catch (error) {
+      next(error)
     }
-
-    // 检查 Content-Type，过滤明显非文本的响应
-    const contentType = fetchRes.headers.get('content-type') || ''
-    if (contentType.includes('application/octet-stream')
-      || contentType.includes('video/')
-      || contentType.includes('audio/')
-      || contentType.includes('image/')) {
-      res.status(400).json({ error: '该链接不是文本文件，无法读取代码' })
-      return
-    }
-
-    // 读取内容，限制 1MB
-    const text = await fetchRes.text()
-    if (text.length > 1_048_576) {
-      res.status(400).json({ error: '文件过大（超过 1MB），请手动粘贴代码' })
-      return
-    }
-
-    const lineCount = text.trimEnd().split('\n').length || 1
-
-    res.json({
-      content: text,
-      byteSize: Buffer.byteLength(text, 'utf8'),
-      lineCount
-    })
-  } catch (error) {
-    const message = error instanceof Error ? error.message : '未知错误'
-    res.status(500).json({ error: `抓取失败：${message}` })
   }
-})
+)
 
 // ── 可观测性 Metrics 端点 ──
 

@@ -37,7 +37,15 @@ export async function insertTask(task: Task): Promise<void> {
   const db = getDb()
   await db.query(
     'INSERT INTO tasks (id, title, code_snippet, language, scope_id, status, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-    [task.id, task.title, task.codeSnippet, task.language, task.scopeId, task.status, task.createdAt]
+    [
+      task.id,
+      task.title,
+      task.codeSnippet,
+      task.language,
+      task.scopeId,
+      task.status,
+      task.createdAt
+    ]
   )
 }
 
@@ -93,13 +101,24 @@ export async function insertMessage(message: Message): Promise<void> {
   const db = getDb()
   await db.query(
     'INSERT INTO messages (id, task_id, agent_id, role, content, type, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-    [message.id, message.taskId, message.agentId, message.role, message.content, message.type, message.createdAt]
+    [
+      message.id,
+      message.taskId,
+      message.agentId,
+      message.role,
+      message.content,
+      message.type,
+      message.createdAt
+    ]
   )
 }
 
 export async function getMessagesByTask(taskId: string): Promise<Message[]> {
   const db = getDb()
-  const { rows } = await db.query('SELECT * FROM messages WHERE task_id = $1 ORDER BY created_at ASC', [taskId])
+  const { rows } = await db.query(
+    'SELECT * FROM messages WHERE task_id = $1 ORDER BY created_at ASC',
+    [taskId]
+  )
   return (rows as Record<string, unknown>[]).map(row => ({
     id: row.id as string,
     taskId: row.task_id as string,
@@ -119,7 +138,10 @@ export async function insertConversationMessage(message: ConversationMessage): P
   )
 }
 
-export async function getConversationMessages(taskId: string, limit = 12): Promise<ConversationMessage[]> {
+export async function getConversationMessages(
+  taskId: string,
+  limit = 12
+): Promise<ConversationMessage[]> {
   const db = getDb()
   const { rows } = await db.query(
     `SELECT * FROM (
@@ -141,13 +163,28 @@ export async function insertCodeVersion(version: CodeVersion): Promise<void> {
   const db = getDb()
   await db.query(
     'INSERT INTO code_versions (id, task_id, code, language, source, summary, review_task_id, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
-    [version.id, version.taskId, version.code, version.language, version.source, version.summary, version.reviewTaskId || null, version.createdAt]
+    [
+      version.id,
+      version.taskId,
+      version.code,
+      version.language,
+      version.source,
+      version.summary,
+      version.reviewTaskId || null,
+      version.createdAt
+    ]
   )
 }
 
-export async function linkCodeVersionToReview(versionId: string, reviewTaskId: string): Promise<void> {
+export async function linkCodeVersionToReview(
+  versionId: string,
+  reviewTaskId: string
+): Promise<void> {
   const db = getDb()
-  await db.query('UPDATE code_versions SET review_task_id = $1 WHERE id = $2', [reviewTaskId, versionId])
+  await db.query('UPDATE code_versions SET review_task_id = $1 WHERE id = $2', [
+    reviewTaskId,
+    versionId
+  ])
 }
 
 export async function insertKnowledgeDocument(document: {
@@ -162,7 +199,15 @@ export async function insertKnowledgeDocument(document: {
   const db = getDb()
   await db.query(
     'INSERT INTO knowledge_documents (id, scope_id, file_name, language, dimension, content, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-    [document.id, document.scopeId, document.fileName, document.language, document.dimension, document.content, document.createdAt]
+    [
+      document.id,
+      document.scopeId,
+      document.fileName,
+      document.language,
+      document.dimension,
+      document.content,
+      document.createdAt
+    ]
   )
 }
 
@@ -170,13 +215,25 @@ export async function insertKnowledgeChunk(chunk: KnowledgeChunk): Promise<void>
   const db = getDb()
   await db.query(
     'INSERT INTO knowledge_chunks (id, document_id, scope_id, content, source, language, dimension, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
-    [chunk.id, chunk.documentId, chunk.scopeId, chunk.content, chunk.source, chunk.language, chunk.dimension, chunk.createdAt]
+    [
+      chunk.id,
+      chunk.documentId,
+      chunk.scopeId,
+      chunk.content,
+      chunk.source,
+      chunk.language,
+      chunk.dimension,
+      chunk.createdAt
+    ]
   )
 }
 
 export async function getKnowledgeChunks(scopeId: string): Promise<KnowledgeChunk[]> {
   const db = getDb()
-  const { rows } = await db.query('SELECT * FROM knowledge_chunks WHERE scope_id = $1 ORDER BY created_at ASC', [scopeId])
+  const { rows } = await db.query(
+    'SELECT * FROM knowledge_chunks WHERE scope_id = $1 ORDER BY created_at ASC',
+    [scopeId]
+  )
   return (rows as Record<string, unknown>[]).map(row => ({
     id: row.id as string,
     documentId: row.document_id as string,
@@ -195,7 +252,15 @@ export async function insertToolCall(toolCall: ToolCall): Promise<void> {
   const db = getDb()
   await db.query(
     'INSERT INTO tool_calls (id, agent_id, message_id, tool_name, input, output, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-    [toolCall.id, toolCall.agentId, toolCall.messageId, toolCall.toolName, toolCall.input, toolCall.output, toolCall.createdAt]
+    [
+      toolCall.id,
+      toolCall.agentId,
+      toolCall.messageId,
+      toolCall.toolName,
+      toolCall.input,
+      toolCall.output,
+      toolCall.createdAt
+    ]
   )
 }
 
@@ -223,49 +288,56 @@ export async function getReportByTask(taskId: string): Promise<Report | null> {
   }
 }
 
-  const VALID_TASK_STATUSES: Task['status'][] = ['pending', 'orchestrating', 'reviewing', 'summarizing', 'completed', 'failed']
+const VALID_TASK_STATUSES: Task['status'][] = [
+  'pending',
+  'orchestrating',
+  'reviewing',
+  'summarizing',
+  'completed',
+  'failed'
+]
 
-  function isTaskStatus(value: unknown): value is Task['status'] {
-    return typeof value === 'string' && (VALID_TASK_STATUSES as string[]).includes(value)
-  }
+function isTaskStatus(value: unknown): value is Task['status'] {
+  return typeof value === 'string' && (VALID_TASK_STATUSES as string[]).includes(value)
+}
 
-  export async function listTasks(limit = 20, offset = 0, status?: Task['status']): Promise<Task[]> {
-    const db = getDb()
-    const params: unknown[] = []
-    let whereClause = ''
-    if (isTaskStatus(status)) {
-      params.push(status)
-      whereClause = ' WHERE t.status = $1'
-    }
-    params.push(limit, offset)
-    const { rows } = await db.query(
-      `SELECT t.*, r.score as report_score FROM tasks t LEFT JOIN reports r ON t.id = r.task_id${whereClause} ORDER BY t.created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
-      params
-    )
-    return (rows as Record<string, unknown>[]).map(row => ({
-      id: row.id as string,
-      title: row.title as string,
-      codeSnippet: row.code_snippet as string,
-      language: row.language as string,
-      scopeId: (row.scope_id as string) || (row.id as string),
-      status: row.status as Task['status'],
-      createdAt: row.created_at as string,
-      score: (row.report_score as number) ?? null
-    }))
+export async function listTasks(limit = 20, offset = 0, status?: Task['status']): Promise<Task[]> {
+  const db = getDb()
+  const params: unknown[] = []
+  let whereClause = ''
+  if (isTaskStatus(status)) {
+    params.push(status)
+    whereClause = ' WHERE t.status = $1'
   }
+  params.push(limit, offset)
+  const { rows } = await db.query(
+    `SELECT t.*, r.score as report_score FROM tasks t LEFT JOIN reports r ON t.id = r.task_id${whereClause} ORDER BY t.created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    params
+  )
+  return (rows as Record<string, unknown>[]).map(row => ({
+    id: row.id as string,
+    title: row.title as string,
+    codeSnippet: row.code_snippet as string,
+    language: row.language as string,
+    scopeId: (row.scope_id as string) || (row.id as string),
+    status: row.status as Task['status'],
+    createdAt: row.created_at as string,
+    score: (row.report_score as number) ?? null
+  }))
+}
 
-  export async function countTasks(status?: Task['status']): Promise<number> {
-    const db = getDb()
-    const params: unknown[] = []
-    let whereClause = ''
-    if (isTaskStatus(status)) {
-      params.push(status)
-      whereClause = ' WHERE status = $1'
-    }
-    const { rows } = await db.query(`SELECT COUNT(*) as cnt FROM tasks${whereClause}`, params)
-    const row = rows[0] as { cnt: string }
-    return parseInt(row.cnt, 10)
+export async function countTasks(status?: Task['status']): Promise<number> {
+  const db = getDb()
+  const params: unknown[] = []
+  let whereClause = ''
+  if (isTaskStatus(status)) {
+    params.push(status)
+    whereClause = ' WHERE status = $1'
   }
+  const { rows } = await db.query(`SELECT COUNT(*) as cnt FROM tasks${whereClause}`, params)
+  const row = rows[0] as { cnt: string }
+  return parseInt(row.cnt, 10)
+}
 
 // ── Task Events（事件日志：回放与跨进程扇出的数据源）──
 
@@ -302,7 +374,11 @@ export async function insertTaskEvent(
   return Number((rows[0] as { id: string }).id)
 }
 
-export async function getTaskEventsAfter(taskId: string, afterSeq: number, limit = 500): Promise<TaskEventRow[]> {
+export async function getTaskEventsAfter(
+  taskId: string,
+  afterSeq: number,
+  limit = 500
+): Promise<TaskEventRow[]> {
   const db = getDb()
   const { rows } = await db.query(
     'SELECT id, task_id, type, payload, created_at FROM task_events WHERE task_id = $1 AND id > $2 ORDER BY id ASC LIMIT $3',
@@ -355,9 +431,13 @@ export async function cancelTask(id: string): Promise<boolean> {
  * 其他状态不抢占 —— running 说明别的 worker 正在执行（崩溃回收交给 sweeper），
  * terminal 说明是重复投递，幂等吸收即可。
  */
-export async function claimTaskForRun(taskId: string): Promise<{ claimed: boolean; decision: ClaimDecision }> {
+export async function claimTaskForRun(
+  taskId: string
+): Promise<{ claimed: boolean; decision: ClaimDecision }> {
   return withTransaction(async client => {
-    const { rows } = await client.query('SELECT status FROM tasks WHERE id = $1 FOR UPDATE', [taskId])
+    const { rows } = await client.query('SELECT status FROM tasks WHERE id = $1 FOR UPDATE', [
+      taskId
+    ])
     const status = (rows[0] as { status: string } | undefined)?.status
     const decision = decideClaim(status)
     if (decision === 'claim') {
@@ -372,7 +452,10 @@ export async function claimTaskForRun(taskId: string): Promise<{ claimed: boolea
 
 export async function touchTaskHeartbeat(taskId: string): Promise<void> {
   const db = getDb()
-  await db.query('UPDATE tasks SET heartbeat_at = $1 WHERE id = $2', [new Date().toISOString(), taskId])
+  await db.query('UPDATE tasks SET heartbeat_at = $1 WHERE id = $2', [
+    new Date().toISOString(),
+    taskId
+  ])
 }
 
 /** 确认失败后转入重试：回 pending 并消耗一次重试额度 */
@@ -456,8 +539,19 @@ export async function insertTaskMetric(metric: TaskMetricInput): Promise<void> {
   await db.query(
     `INSERT INTO task_metrics (task_id, attempt, status, model, prompt_tokens, completion_tokens, fallback_reviewers, duration_ms, cache_hit, error, created_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-    [metric.taskId, metric.attempt, metric.status, metric.model, metric.promptTokens, metric.completionTokens,
-      metric.fallbackReviewers, metric.durationMs, metric.cacheHit ? true : false, metric.error || null, new Date().toISOString()]
+    [
+      metric.taskId,
+      metric.attempt,
+      metric.status,
+      metric.model,
+      metric.promptTokens,
+      metric.completionTokens,
+      metric.fallbackReviewers,
+      metric.durationMs,
+      metric.cacheHit ? true : false,
+      metric.error || null,
+      new Date().toISOString()
+    ]
   )
 }
 
@@ -515,7 +609,9 @@ export async function aggregateTaskMetrics(sinceIso: string): Promise<TaskMetric
   }
 }
 
-export async function recentTaskFailures(limit = 10): Promise<Array<{ taskId: string; status: string; error: string | null; createdAt: string }>> {
+export async function recentTaskFailures(
+  limit = 10
+): Promise<Array<{ taskId: string; status: string; error: string | null; createdAt: string }>> {
   const db = getDb()
   const { rows } = await db.query(
     `SELECT task_id, status, error, created_at FROM task_metrics WHERE status = 'failed' ORDER BY id DESC LIMIT $1`,
@@ -564,13 +660,22 @@ export async function saveReviewCache(entry: {
     `INSERT INTO review_cache (code_hash, report_content, score, model, prompt_version, created_at)
      VALUES ($1, $2, $3, $4, $5, $6)
      ON CONFLICT (code_hash) DO UPDATE SET report_content = EXCLUDED.report_content, score = EXCLUDED.score, model = EXCLUDED.model, prompt_version = EXCLUDED.prompt_version`,
-    [entry.codeHash, entry.reportContent, entry.score, entry.model, entry.promptVersion, new Date().toISOString()]
+    [
+      entry.codeHash,
+      entry.reportContent,
+      entry.score,
+      entry.model,
+      entry.promptVersion,
+      new Date().toISOString()
+    ]
   )
 }
 
 export async function bumpReviewCacheHit(codeHash: string): Promise<void> {
   const db = getDb()
-  await db.query('UPDATE review_cache SET hit_count = hit_count + 1 WHERE code_hash = $1', [codeHash])
+  await db.query('UPDATE review_cache SET hit_count = hit_count + 1 WHERE code_hash = $1', [
+    codeHash
+  ])
 }
 
 export async function getReviewCacheStats(): Promise<{ entries: number; totalHits: number }> {

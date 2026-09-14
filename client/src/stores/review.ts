@@ -42,7 +42,10 @@ export const useReviewStore = defineStore('review', () => {
     }
   }
 
-  function upsertAgentSlot(role: AgentRole, info: Partial<Pick<AgentSlot, 'status' | 'latestMessage'>>) {
+  function upsertAgentSlot(
+    role: AgentRole,
+    info: Partial<Pick<AgentSlot, 'status' | 'latestMessage'>>
+  ) {
     const idx = agentSlots.value.findIndex(s => s.role === role)
     if (idx >= 0) {
       if (info.status !== undefined) agentSlots.value[idx].status = info.status
@@ -78,5 +81,19 @@ export const useReviewStore = defineStore('review', () => {
     agentSlots.value = []
   }
 
-  return { taskId, scopeId, status, messages, loading, agentSlots, addMessage, upsertAgentSlot, appendToken, setStatus, setTaskId, setScopeId, reset }
+  return {
+    taskId,
+    scopeId,
+    status,
+    messages,
+    loading,
+    agentSlots,
+    addMessage,
+    upsertAgentSlot,
+    appendToken,
+    setStatus,
+    setTaskId,
+    setScopeId,
+    reset
+  }
 })

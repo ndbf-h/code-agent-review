@@ -69,9 +69,12 @@ export async function runJudgeSuite(fromPath: string): Promise<JudgeSuiteOutput>
     const expected = sample.expectedIssues
       .map(e => `[${e.dimension}] ${e.category || e.keyword}`)
       .join('; ')
-    const actual = Object.entries(result.agentIssues)
-      .flatMap(([dim, issues]) => (issues || []).map(issue => `[${dim}] ${issue.category}: ${issue.message}`))
-      .join('\n') || '(无发现)'
+    const actual =
+      Object.entries(result.agentIssues)
+        .flatMap(([dim, issues]) =>
+          (issues || []).map(issue => `[${dim}] ${issue.category}: ${issue.message}`)
+        )
+        .join('\n') || '(无发现)'
 
     try {
       const verdict = await judge.chatStructured<JudgeVerdict>(
@@ -137,13 +140,19 @@ export function renderJudgeReport(output: JudgeSuiteOutput): string {
   lines.push(`- **平均 coverage: ${output.avgCoverage.toFixed(1)}/10**`)
   lines.push(`- 平均 precision: ${output.avgPrecision.toFixed(1)}/10`)
   lines.push(`- 平均 actionability: ${output.avgActionability.toFixed(1)}/10`)
-  lines.push(`- 与确定性匹配的分歧样本: ${output.disagreementCount} 个（judge 高分但匹配判未覆盖，需人工复核）`, '')
-  lines.push('| 样本 | 层级 | 确定性匹配 | coverage | precision | actionability | 分歧 |', '| --- | --- | --- | --- | --- | --- | --- |')
+  lines.push(
+    `- 与确定性匹配的分歧样本: ${output.disagreementCount} 个（judge 高分但匹配判未覆盖，需人工复核）`,
+    ''
+  )
+  lines.push(
+    '| 样本 | 层级 | 确定性匹配 | coverage | precision | actionability | 分歧 |',
+    '| --- | --- | --- | --- | --- | --- | --- |'
+  )
   for (const row of output.rows) {
     const v = row.verdict
     lines.push(
       `| ${row.sampleId} | ${row.tier} | ${row.matchedCount}/${row.expectedCount} | ` +
-      `${v ? v.coverage : '-'} | ${v ? v.precision : '-'} | ${v ? v.actionability : '-'} | ${row.disagreement ? '⚠️' : ''} |`
+        `${v ? v.coverage : '-'} | ${v ? v.precision : '-'} | ${v ? v.actionability : '-'} | ${row.disagreement ? '⚠️' : ''} |`
     )
   }
   return lines.join('\n')

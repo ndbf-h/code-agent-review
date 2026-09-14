@@ -92,7 +92,7 @@ function extractJson(text: string): string {
   // 尝试匹配以 { 或 [ 开头的最长片段
   const firstBrace = text.indexOf('{')
   const firstBracket = text.indexOf('[')
-  let start = -1
+  let start: number
   if (firstBrace === -1) start = firstBracket
   else if (firstBracket === -1) start = firstBrace
   else start = Math.min(firstBrace, firstBracket)
@@ -177,7 +177,7 @@ class LlmClient {
     tools?: ToolDefinition[],
     options?: ChatOptions
   ): Promise<LlmResponse> {
-    let lastError: Error | null = null
+    let lastError: Error
 
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       try {
@@ -217,10 +217,9 @@ class LlmClient {
             maxRetries: this.maxRetries,
             error: lastError.message
           })
-          throw new LlmError(
-            `LLM 调用失败，已重试 ${this.maxRetries} 次: ${lastError.message}`,
-            { originalError: lastError.message }
-          )
+          throw new LlmError(`LLM 调用失败，已重试 ${this.maxRetries} 次: ${lastError.message}`, {
+            originalError: lastError.message
+          })
         }
 
         logger.warn(`LLM 调用失败，准备重试 ${attempt + 1}/${this.maxRetries}`, {
@@ -262,7 +261,8 @@ class LlmClient {
     } else {
       augmentedMessages.push({
         role: 'user',
-        content: '请以纯 JSON 格式返回你的回答，不要包含 markdown 代码块标记或其他文字。只返回有效的 JSON。'
+        content:
+          '请以纯 JSON 格式返回你的回答，不要包含 markdown 代码块标记或其他文字。只返回有效的 JSON。'
       })
     }
 
@@ -315,10 +315,9 @@ class LlmClient {
       }
     }
 
-    throw new LlmError(
-      `结构化输出解析失败，已重试 ${retries} 次: ${lastError?.message}`,
-      { lastError: lastError?.message }
-    )
+    throw new LlmError(`结构化输出解析失败，已重试 ${retries} 次: ${lastError?.message}`, {
+      lastError: lastError?.message
+    })
   }
 
   /**
@@ -328,11 +327,10 @@ class LlmClient {
   async healthCheck(): Promise<boolean> {
     try {
       logger.debug('LLM 健康检查开始')
-      const response = await this.chat(
-        [{ role: 'user', content: 'ping' }],
-        undefined,
-        { maxTokens: 1, temperature: 0 }
-      )
+      const response = await this.chat([{ role: 'user', content: 'ping' }], undefined, {
+        maxTokens: 1,
+        temperature: 0
+      })
       const ok = !!response.content || response.finishReason !== 'error'
       logger.info('LLM 健康检查完成', { ok })
       return ok
@@ -422,7 +420,7 @@ class LlmClient {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.config.apiKey}`
+          Authorization: `Bearer ${this.config.apiKey}`
         },
         body: JSON.stringify(body),
         signal: options?.signal
@@ -437,10 +435,10 @@ class LlmClient {
     if (!response.ok) {
       const errorText = await response.text()
       logger.error('LLM 请求失败', { status: response.status, body: errorText })
-      throw new LlmError(
-        `LLM API error: ${response.status} ${errorText}`,
-        { status: response.status, body: errorText }
-      )
+      throw new LlmError(`LLM API error: ${response.status} ${errorText}`, {
+        status: response.status,
+        body: errorText
+      })
     }
 
     const data = (await response.json()) as Record<string, unknown>
@@ -460,7 +458,11 @@ class LlmClient {
     if (usage) {
       promptTokens += usage.prompt_tokens || 0
       completionTokens += usage.completion_tokens || 0
-      recordLlmUsage({ model: this.config.model, promptTokens: usage.prompt_tokens || 0, completionTokens: usage.completion_tokens || 0 })
+      recordLlmUsage({
+        model: this.config.model,
+        promptTokens: usage.prompt_tokens || 0,
+        completionTokens: usage.completion_tokens || 0
+      })
     }
 
     const choice = choices[0]
@@ -545,7 +547,7 @@ class LlmClient {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.config.apiKey}`
+          Authorization: `Bearer ${this.config.apiKey}`
         },
         body: JSON.stringify(body),
         signal: options?.signal
@@ -559,20 +561,17 @@ class LlmClient {
     if (!response.ok) {
       const errorText = await response.text()
       logger.error('LLM 流式请求失败', { status: response.status, body: errorText })
-      throw new LlmError(
-        `LLM stream error: ${response.status} ${errorText}`,
-        { status: response.status, body: errorText }
-      )
+      throw new LlmError(`LLM stream error: ${response.status} ${errorText}`, {
+        status: response.status,
+        body: errorText
+      })
     }
 
     const decoder = new TextDecoder()
     let buffer = ''
 
     // 累积工具调用参数（流式传输中参数分片到达）
-    const toolCallsAcc = new Map<
-      number,
-      { id: string; name: string; args: string }
-    >()
+    const toolCallsAcc = new Map<number, { id: string; name: string; args: string }>()
 
     let doneYielded = false
     let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
@@ -625,19 +624,21 @@ class LlmClient {
 
           try {
             const parsed = JSON.parse(dataStr) as Record<string, unknown>
-            const choices = parsed.choices as Array<{
-              index?: number
-              delta?: {
-                content?: string
-                tool_calls?: Array<{
+            const choices = parsed.choices as
+              | Array<{
                   index?: number
-                  id?: string
-                  type?: string
-                  function?: { name?: string; arguments?: string }
+                  delta?: {
+                    content?: string
+                    tool_calls?: Array<{
+                      index?: number
+                      id?: string
+                      type?: string
+                      function?: { name?: string; arguments?: string }
+                    }>
+                  }
+                  finish_reason?: string | null
                 }>
-              }
-              finish_reason?: string | null
-            }> | undefined
+              | undefined
             const choice = choices?.[0]
             if (!choice) continue
 
@@ -663,11 +664,16 @@ class LlmClient {
             }
 
             // 从流式最后 chunk 提取 token 使用量（DeepSeek/OpenAI 在 finish_reason chunk 返回 usage）
-            const streamUsage = parsed.usage as { prompt_tokens?: number; completion_tokens?: number } | undefined
+            const streamUsage = parsed.usage as
+              { prompt_tokens?: number; completion_tokens?: number } | undefined
             if (streamUsage) {
               promptTokens += streamUsage.prompt_tokens || 0
               completionTokens += streamUsage.completion_tokens || 0
-              recordLlmUsage({ model: this.config.model, promptTokens: streamUsage.prompt_tokens || 0, completionTokens: streamUsage.completion_tokens || 0 })
+              recordLlmUsage({
+                model: this.config.model,
+                promptTokens: streamUsage.prompt_tokens || 0,
+                completionTokens: streamUsage.completion_tokens || 0
+              })
               logger.debug('LLM 流式 token 用量', {
                 requestId,
                 promptTokens: streamUsage.prompt_tokens,
@@ -784,10 +790,10 @@ class LlmClient {
         status: response.status,
         body: errorText
       })
-      throw new LlmError(
-        `LLM stream error: ${response.status} ${errorText}`,
-        { status: response.status, body: errorText }
-      )
+      throw new LlmError(`LLM stream error: ${response.status} ${errorText}`, {
+        status: response.status,
+        body: errorText
+      })
     }
 
     const decoder = new TextDecoder()
@@ -795,10 +801,7 @@ class LlmClient {
 
     // 累积 tool_use 数据（按 content block index 分组）
     // Anthropic 的 tool_use input 以增量 JSON（input_json_delta）传输
-    const toolUsesAcc = new Map<
-      number,
-      { id: string; name: string; inputJson: string }
-    >()
+    const toolUsesAcc = new Map<number, { id: string; name: string; inputJson: string }>()
 
     let doneYielded = false
     let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
@@ -846,10 +849,7 @@ class LlmClient {
 
             switch (eventType) {
               case 'content_block_start': {
-                const contentBlock = parsed.content_block as Record<
-                  string,
-                  unknown
-                > | undefined
+                const contentBlock = parsed.content_block as Record<string, unknown> | undefined
                 if (contentBlock?.type === 'tool_use') {
                   const index = (parsed.index as number) ?? 0
                   toolUsesAcc.set(index, {
@@ -905,12 +905,14 @@ class LlmClient {
               case 'message_delta': {
                 // 记录 stop_reason 和 output_tokens
                 const delta = parsed.delta as Record<string, unknown> | undefined
-                const usage = parsed.usage as
-                  | { output_tokens?: number }
-                  | undefined
+                const usage = parsed.usage as { output_tokens?: number } | undefined
                 if (usage?.output_tokens) {
                   completionTokens += usage.output_tokens
-                  recordLlmUsage({ model: this.config.model, promptTokens: anthropicInputTokens, completionTokens: usage.output_tokens })
+                  recordLlmUsage({
+                    model: this.config.model,
+                    promptTokens: anthropicInputTokens,
+                    completionTokens: usage.output_tokens
+                  })
                 }
                 logger.debug('Anthropic 流式 message_delta', {
                   requestId,
@@ -923,9 +925,7 @@ class LlmClient {
               case 'message_start': {
                 // 记录 input_tokens
                 const message = parsed.message as Record<string, unknown> | undefined
-                const usage = message?.usage as
-                  | { input_tokens?: number }
-                  | undefined
+                const usage = message?.usage as { input_tokens?: number } | undefined
                 if (usage?.input_tokens) {
                   promptTokens += usage.input_tokens
                   anthropicInputTokens = usage.input_tokens
@@ -1025,10 +1025,10 @@ class LlmClient {
         status: response.status,
         body: errorText
       })
-      throw new LlmError(
-        `LLM API error: ${response.status} ${errorText}`,
-        { status: response.status, body: errorText }
-      )
+      throw new LlmError(`LLM API error: ${response.status} ${errorText}`, {
+        status: response.status,
+        body: errorText
+      })
     }
 
     const data = (await response.json()) as Record<string, unknown>
@@ -1045,7 +1045,11 @@ class LlmClient {
     if (usage) {
       promptTokens += usage.input_tokens || 0
       completionTokens += usage.output_tokens || 0
-      recordLlmUsage({ model: this.config.model, promptTokens: usage.input_tokens || 0, completionTokens: usage.output_tokens || 0 })
+      recordLlmUsage({
+        model: this.config.model,
+        promptTokens: usage.input_tokens || 0,
+        completionTokens: usage.output_tokens || 0
+      })
     }
 
     const textBlock = content.find(c => c.type === 'text')

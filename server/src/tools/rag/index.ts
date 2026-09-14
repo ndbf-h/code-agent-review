@@ -6,14 +6,15 @@ import { registerCustomGuidelines, getGuidelineDocuments } from './knowledge-bas
 const retrieveCodingGuidelines: Tool = {
   definition: {
     name: 'retrieveCodingGuidelines',
-    description: 'Retrieve relevant coding standards and historical review guidance for the submitted code. Use before making a final review judgment.',
+    description:
+      'Retrieve relevant coding standards and historical review guidance for the submitted code. Use before making a final review judgment.',
     parameters: {
       code: { type: 'string', description: 'Code or focused code fragment to review' },
       language: { type: 'string', description: 'Programming language' },
       dimension: { type: 'string', description: 'security, performance, style, or logic' },
       query: { type: 'string', description: 'Optional focused retrieval query' },
-      topK: { type: 'number', description: 'Number of documents to return, from 1 to 8' }
-      ,scopeId: { type: 'string', description: 'Knowledge scope for project-specific guidelines' }
+      topK: { type: 'number', description: 'Number of documents to return, from 1 to 8' },
+      scopeId: { type: 'string', description: 'Knowledge scope for project-specific guidelines' }
     }
   },
   async execute(input: Record<string, unknown>): Promise<string> {
@@ -26,9 +27,10 @@ const retrieveCodingGuidelines: Tool = {
       scopeId: input.scopeId ? String(input.scopeId) : undefined
     }
     // 默认混合检索（BM25+向量+RRF+重排，未配嵌入密钥时自动降级）；RAG_MODE=legacy 切回词元打分 baseline
-    const results = process.env.RAG_MODE === 'legacy'
-      ? retrieveGuidelines(request)
-      : await retrieveGuidelinesHybrid(request)
+    const results =
+      process.env.RAG_MODE === 'legacy'
+        ? retrieveGuidelines(request)
+        : await retrieveGuidelinesHybrid(request)
     return JSON.stringify({
       results,
       context: formatRetrievedContext(results)
@@ -36,4 +38,11 @@ const retrieveCodingGuidelines: Tool = {
   }
 }
 
-export { retrieveCodingGuidelines, retrieveGuidelines, retrieveGuidelinesHybrid, formatRetrievedContext, registerCustomGuidelines, getGuidelineDocuments }
+export {
+  retrieveCodingGuidelines,
+  retrieveGuidelines,
+  retrieveGuidelinesHybrid,
+  formatRetrievedContext,
+  registerCustomGuidelines,
+  getGuidelineDocuments
+}

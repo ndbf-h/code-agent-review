@@ -46,7 +46,10 @@ export async function runRagSuite(datasetPath: string): Promise<{
   }
 }
 
-function buildResult(query: { id: string; type: RagQueryType; expectedDocIds: string[] }, retrievedDocIds: string[]): RagQueryResult {
+function buildResult(
+  query: { id: string; type: RagQueryType; expectedDocIds: string[] },
+  retrievedDocIds: string[]
+): RagQueryResult {
   return {
     queryId: query.id,
     type: query.type,
@@ -58,7 +61,10 @@ function buildResult(query: { id: string; type: RagQueryType; expectedDocIds: st
   }
 }
 
-function summarize(results: RagQueryResult[]): { summary: RagSuiteSummary; results: RagQueryResult[] } {
+function summarize(results: RagQueryResult[]): {
+  summary: RagSuiteSummary
+  results: RagQueryResult[]
+} {
   const types = [...new Set(results.map(r => r.type))] as RagQueryType[]
   const byType = types.map(type => {
     const group = results.filter(r => r.type === type)

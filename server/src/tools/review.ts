@@ -1,3 +1,4 @@
+import * as acorn from 'acorn'
 import type { Tool } from '../agent/tool-registry'
 import { scanCode, getRulesByDimension } from './rules'
 
@@ -40,7 +41,8 @@ const analyzeCode: Tool = {
 const checkPattern: Tool = {
   definition: {
     name: 'checkPattern',
-    description: '按特定模式或规则检查代码（sql_injection、xss、naming、null_check、sync_block 等）',
+    description:
+      '按特定模式或规则检查代码（sql_injection、xss、naming、null_check、sync_block 等）',
     parameters: {
       code: { type: 'string', description: '待检查的代码' },
       pattern: { type: 'string', description: '检查模式' }
@@ -99,8 +101,7 @@ const checkComplexity: Tool = {
     // 圈复杂度：统计分支关键字
     const branchPattern = /\b(if|for|while|case|catch|else\s+if|\?\?|&&|\|\|)\b/gi
     let cyclomaticComplexity = 1 // 基础复杂度 = 1
-    let branchMatch: RegExpExecArray | null
-    while ((branchMatch = branchPattern.exec(code)) !== null) {
+    while (branchPattern.exec(code) !== null) {
       cyclomaticComplexity++
     }
     branchPattern.lastIndex = 0
@@ -168,17 +169,15 @@ const validateSyntax: Tool = {
     const language = (input.language as string) || 'javascript'
 
     // JS/TS 场景尝试用 acorn 解析
-    if (language === 'javascript' || language === 'typescript' || language === 'jsx' || language === 'tsx') {
+    if (
+      language === 'javascript' ||
+      language === 'typescript' ||
+      language === 'jsx' ||
+      language === 'tsx'
+    ) {
       try {
-        // 动态 require acorn（如果未安装则 fallback）
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const acorn = require('acorn')
-        if (!acorn || typeof acorn.parse !== 'function') {
-          return JSON.stringify({ valid: false, errors: [{ line: 1, message: 'acorn 解析器不可用，请安装 acorn 依赖' }] })
-        }
-        const options = language === 'typescript' || language === 'tsx'
-          ? { ecmaVersion: 'latest', sourceType: 'module', plugins: { typescript: true } as Record<string, boolean> }
-          : { ecmaVersion: 'latest', sourceType: 'module' }
+        // acorn 只解析标准 ECMAScript；TS 语法由调用方按错误信息自行判断
+        const options: acorn.Options = { ecmaVersion: 'latest', sourceType: 'module' }
         acorn.parse(code, options)
         return JSON.stringify({ valid: true, errors: [] })
       } catch (err: unknown) {
@@ -209,10 +208,16 @@ const validateSyntax: Tool = {
     }
 
     if (braceDepth !== 0) {
-      heuristics.push({ line: lines.length, message: `大括号不匹配（差 ${Math.abs(braceDepth)} 个）` })
+      heuristics.push({
+        line: lines.length,
+        message: `大括号不匹配（差 ${Math.abs(braceDepth)} 个）`
+      })
     }
     if (parenDepth !== 0) {
-      heuristics.push({ line: lines.length, message: `圆括号不匹配（差 ${Math.abs(parenDepth)} 个）` })
+      heuristics.push({
+        line: lines.length,
+        message: `圆括号不匹配（差 ${Math.abs(parenDepth)} 个）`
+      })
     }
 
     return JSON.stringify({

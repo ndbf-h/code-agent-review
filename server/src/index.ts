@@ -1,78 +1,48 @@
 import 'dotenv/config'
-import express from 'express'
-import cors from 'cors'
 import { loadConfig } from './config'
 import { initDb } from './db/schema'
-import { closeDb } from './db/connection'
+import { getDb, closeDb } from './db/connection'
 import { registerAllTools } from './tools/index'
-import { createRateLimiter } from './middleware/rateLimiter'
 import { llmClient } from './agent/llm-client'
-import { tasksRouter, metricsRouter, setTaskProducer } from './routes/tasks'
+import { setTaskProducer } from './routes/tasks'
 import { RabbitSession } from './queue/rabbit'
 import { createTaskProducer } from './queue/producer'
 import { startSweeper } from './queue/sweeper'
 import { startEventSubscriber, stopEventSubscriber } from './services/eventService'
 import { initTracing, shutdownTracing } from './observability/tracing'
-import { AppError } from './errors'
 import { loadGuidelinesFromDatabase } from './services/knowledgeService'
-import { mountMcpEndpoint } from './mcp/server'
 import { mountExternalMcpTools } from './mcp/client'
+import { createApp } from './app'
+import { createLogger } from './logger'
+
+const logger = createLogger('server')
 
 async function main() {
-  // 启动时校验配置
+  // 启动时校验配置（失败会列出全部问题字段并退出）
   const config = loadConfig()
-  const app = express()
 
   // RabbitMQ 会话：API 进程仅作生产者（发布任务），消费在独立 worker 进程
   const rabbit = new RabbitSession(config.rabbitmqUrl, 'api', config.taskRetry.delayMs)
   setTaskProducer(createTaskProducer(rabbit))
 
-  app.use(cors())
-  // MCP 端点必须在 express.json() 之前挂载（自管 body 解析）；工具清单请求时惰性读取 registry
-  mountMcpEndpoint(app)
-  app.use(express.json())
-
-  // 全局限流：100 req/min
-  const globalLimiter = createRateLimiter(100, 60_000)
-  app.use(globalLimiter)
+  const app = createApp({
+    config,
+    health: {
+      checkDb: () =>
+        getDb()
+          .query('SELECT 1')
+          .then(() => true),
+      isRabbitConnected: () => rabbit.isConnected(),
+      checkLlm: () => llmClient.healthCheck()
+    }
+  })
 
   await initDb()
-  console.log('[db] Database initialized')
+  logger.info('Database initialized')
   await loadGuidelinesFromDatabase()
 
   registerAllTools()
   void mountExternalMcpTools()
-
-  // 任务路由限流：10 req/min
-  const reviewLimiter = createRateLimiter(10, 60_000)
-
-  app.use('/api/tasks', reviewLimiter, tasksRouter)
-
-  // 可观测性 Metrics 路由
-  app.use('/api/metrics', metricsRouter)
-
-  // 增强健康检查
-  app.get('/api/health', async (_req, res) => {
-    const llmHealthy = await llmClient.healthCheck().catch(() => false)
-    res.json({
-      status: 'ok',
-      uptime: process.uptime(),
-      db: 'connected',
-      llm: llmHealthy ? 'healthy' : 'unhealthy',
-      rabbitmq: rabbit.isConnected() ? 'connected' : 'disconnected'
-    })
-  })
-
-  // 全局错误处理中间件（必须在路由之后注册）
-  // Express 4 类型不原生支持 4-参数错误处理签名，需要类型断言
-  app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    if (err instanceof AppError) {
-      res.status(err.statusCode).json(err.toJSON())
-      return
-    }
-    console.error('[unhandled]', err)
-    res.status(500).json({ error: '内部服务器错误', code: 'INTERNAL_ERROR' })
-  })
 
   // 事件实时扇出依赖 PG LISTEN/NOTIFY（worker 落库事件 → 本进程推给 SSE 连接）
   await startEventSubscriber()
@@ -89,14 +59,14 @@ async function main() {
   const sweeper = startSweeper(rabbit, createTaskProducer(rabbit), config)
 
   const server = app.listen(config.port, () => {
-    console.log(`[server] Running on http://localhost:${config.port}`)
+    logger.info(`Running on http://localhost:${config.port}`, { env: config.env })
   })
 
   let shuttingDown = false
   const shutdown = (signal: string) => {
     if (shuttingDown) return
     shuttingDown = true
-    console.log(`[server] 收到 ${signal}，开始优雅关闭`)
+    logger.info(`收到 ${signal}，开始优雅关闭`)
     server.close(async () => {
       try {
         await sweeper.stop()
@@ -115,4 +85,7 @@ async function main() {
   process.on('SIGINT', () => shutdown('SIGINT'))
 }
 
-main().catch(console.error)
+main().catch(error => {
+  logger.error('启动失败', error)
+  process.exit(1)
+})

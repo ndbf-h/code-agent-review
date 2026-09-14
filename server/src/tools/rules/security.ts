@@ -4,10 +4,11 @@ import type { Rule } from './types'
 export const securityRules: Rule[] = [
   {
     name: 'sql-string-concat',
-    pattern: /(?:["'`]\s*\+\s*["'`]?\s*(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE)\b|\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE)\b[^;{]*\+["'`]?\s*\w+)/gi,
+    pattern:
+      /(?:["'`]\s*\+\s*["'`]?\s*(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE)\b|\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE)\b[^;{]*\+["'`]?\s*\w+)/gi,
     severity: 'critical',
     category: 'SQL 注入',
-    message: (m) => `疑似 SQL 字符串拼接：${m[0].substring(0, 40)}`,
+    message: m => `疑似 SQL 字符串拼接：${m[0].substring(0, 40)}`,
     suggestion: '使用参数化查询（如 PreparedStatement、ORM 的占位符语法）替代字符串拼接'
   },
   {
@@ -23,7 +24,7 @@ export const securityRules: Rule[] = [
     pattern: /(api[_-]?key|secret|password|token)\s*[:=]\s*["'][^"'\s]{8,}["']/gi,
     severity: 'critical',
     category: '硬编码密钥',
-    message: (m) => `发现硬编码的敏感信息：${m[0].substring(0, 50)}...`,
+    message: m => `发现硬编码的敏感信息：${m[0].substring(0, 50)}...`,
     suggestion: '将密钥移至环境变量或密钥管理服务，使用 process.env 或配置中心获取'
   },
   {

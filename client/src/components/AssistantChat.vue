@@ -41,12 +41,16 @@ async function send(): Promise<void> {
   sending.value = true
 
   try {
-    const response = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3001/api'}/tasks/${store.taskId}/chat/stream`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message })
-    })
-    if (!response.ok || !response.body) throw new Error(`Assistant request failed (${response.status})`)
+    const response = await fetch(
+      `${import.meta.env.VITE_API_BASE || 'http://localhost:3001/api'}/tasks/${store.taskId}/chat/stream`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message })
+      }
+    )
+    if (!response.ok || !response.body)
+      throw new Error(`Assistant request failed (${response.status})`)
 
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
@@ -60,12 +64,17 @@ async function send(): Promise<void> {
       for (const event of events) {
         const dataLine = event.split('\n').find(line => line.startsWith('data: '))
         if (!dataLine) continue
-        const data = JSON.parse(dataLine.slice(6)) as { content?: string; message?: string; proposal?: FixResult & { summary: string; language: string } }
+        const data = JSON.parse(dataLine.slice(6)) as {
+          content?: string
+          message?: string
+          proposal?: FixResult & { summary: string; language: string }
+        }
         if (event.startsWith('event: token') && data.content) {
           assistantMessage.content += data.content
           await nextTick()
         }
-        if (event.startsWith('event: error')) throw new Error(data.message || 'Assistant request failed')
+        if (event.startsWith('event: error'))
+          throw new Error(data.message || 'Assistant request failed')
         if (event.startsWith('event: proposal') && data.proposal) {
           proposal.value = data.proposal
           proposalAccepted.value = false
@@ -82,22 +91,32 @@ async function send(): Promise<void> {
 async function acceptProposal(): Promise<void> {
   if (!proposal.value || !store.taskId) return
   try {
-    const { data } = await axios.post(`${import.meta.env.VITE_API_BASE || 'http://localhost:3001/api'}/tasks/${store.taskId}/versions`, {
-      code: proposal.value.fixedCode,
-      language: proposal.value.language,
-      summary: 'Accepted assistant code proposal'
-    })
+    const { data } = await axios.post(
+      `${import.meta.env.VITE_API_BASE || 'http://localhost:3001/api'}/tasks/${store.taskId}/versions`,
+      {
+        code: proposal.value.fixedCode,
+        language: proposal.value.language,
+        summary: 'Accepted assistant code proposal'
+      }
+    )
     proposalAccepted.value = true
     proposalVersionId.value = data.version?.id || null
     ElMessage.success('修改后的代码版本已保存')
   } catch (error) {
-    ElMessage.error(axios.isAxiosError(error) ? error.response?.data?.error || '保存失败' : '保存失败')
+    ElMessage.error(
+      axios.isAxiosError(error) ? error.response?.data?.error || '保存失败' : '保存失败'
+    )
   }
 }
 
 async function reReviewProposal(): Promise<void> {
   if (!proposal.value) return
-  await startReview(proposal.value.fixedCode, proposal.value.language, store.scopeId || undefined, proposalVersionId.value || undefined)
+  await startReview(
+    proposal.value.fixedCode,
+    proposal.value.language,
+    store.scopeId || undefined,
+    proposalVersionId.value || undefined
+  )
 }
 
 async function handleFile(file: File | undefined): Promise<void> {
@@ -105,10 +124,15 @@ async function handleFile(file: File | undefined): Promise<void> {
   uploading.value = true
   uploadMessage.value = ''
   try {
-    const response = await fetch(`${import.meta.env.VITE_API_BASE || 'http://localhost:3001/api'}/tasks/${store.taskId}/guidelines`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileName: file.name, content: await file.text() })
-    })
-    const data = await response.json() as { error?: string; chunkCount?: number }
+    const response = await fetch(
+      `${import.meta.env.VITE_API_BASE || 'http://localhost:3001/api'}/tasks/${store.taskId}/guidelines`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName: file.name, content: await file.text() })
+      }
+    )
+    const data = (await response.json()) as { error?: string; chunkCount?: number }
     if (!response.ok) throw new Error(data.error || '上传失败')
     uploadMessage.value = `已加入知识库，切分为 ${data.chunkCount} 个片段`
   } catch (error) {
@@ -163,9 +187,20 @@ function rejectProposal(): void {
         :language="proposal.language"
       />
       <div class="proposal-actions">
-        <button type="button" :disabled="proposalAccepted" @click="acceptProposal">{{ proposalAccepted ? '已接受' : '接受并保存版本' }}</button>
-        <button type="button" :disabled="!proposalAccepted" @click="reReviewProposal">重新审查此版本</button>
-        <button type="button" class="secondary" :disabled="proposalAccepted" @click="rejectProposal">拒绝修改</button>
+        <button type="button" :disabled="proposalAccepted" @click="acceptProposal">
+          {{ proposalAccepted ? '已接受' : '接受并保存版本' }}
+        </button>
+        <button type="button" :disabled="!proposalAccepted" @click="reReviewProposal">
+          重新审查此版本
+        </button>
+        <button
+          type="button"
+          class="secondary"
+          :disabled="proposalAccepted"
+          @click="rejectProposal"
+        >
+          拒绝修改
+        </button>
       </div>
     </div>
     <div class="guideline-upload">
@@ -177,23 +212,48 @@ function rejectProposal(): void {
           :disabled="uploading"
           @change="uploadGuideline"
         />
-        <svg class="dropzone-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <svg
+          class="dropzone-icon"
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
           <path d="M17 8l-5-5-5 5" />
           <path d="M12 3v12" />
         </svg>
         <span>{{ uploading ? '上传中...' : '点击或拖入文件（md / txt / json / yaml）' }}</span>
       </label>
-      <span v-if="uploadMessage" class="upload-message" :class="{ error: uploadMessage.includes('失败') || uploadMessage.includes('不支持') }">{{ uploadMessage }}</span>
+      <span
+        v-if="uploadMessage"
+        class="upload-message"
+        :class="{ error: uploadMessage.includes('失败') || uploadMessage.includes('不支持') }"
+        >{{ uploadMessage }}</span
+      >
     </div>
     <div class="assistant-suggestions">
-      <button type="button" @click="input = '为什么这个问题会被判定为高风险？'">为什么是高风险？</button>
+      <button type="button" @click="input = '为什么这个问题会被判定为高风险？'">
+        为什么是高风险？
+      </button>
       <button type="button" @click="input = '请结合项目规范给出修改建议'">给出修改建议</button>
       <button type="button" @click="input = '请解释这段代码的主要问题'">解释主要问题</button>
     </div>
     <form class="assistant-form" @submit.prevent="send">
-      <textarea v-model="input" rows="2" :disabled="sending" placeholder="继续询问代码问题，或请求修改建议..." />
-      <button type="submit" :disabled="sending || !input.trim()">{{ sending ? '回答中...' : '发送' }}</button>
+      <textarea
+        v-model="input"
+        rows="2"
+        :disabled="sending"
+        placeholder="继续询问代码问题，或请求修改建议..."
+      />
+      <button type="submit" :disabled="sending || !input.trim()">
+        {{ sending ? '回答中...' : '发送' }}
+      </button>
     </form>
   </section>
 </template>
@@ -250,8 +310,13 @@ function rejectProposal(): void {
 }
 
 @keyframes status-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
 }
 
 .assistant-messages {
@@ -301,7 +366,9 @@ function rejectProposal(): void {
   cursor: pointer;
   font-size: 13px;
   font-weight: 600;
-  transition: opacity 0.15s ease, transform 0.15s ease;
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
 }
 
 .proposal-actions button:hover:not(:disabled) {
@@ -359,7 +426,9 @@ function rejectProposal(): void {
   min-height: 42px;
   background: var(--color-surface);
   color: var(--color-text);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .assistant-form textarea:focus {
@@ -446,8 +515,14 @@ function rejectProposal(): void {
 }
 
 @media (max-width: 600px) {
-  .assistant-header { flex-direction: column; }
-  .assistant-form { flex-direction: column; }
-  .assistant-form button { align-self: stretch; }
+  .assistant-header {
+    flex-direction: column;
+  }
+  .assistant-form {
+    flex-direction: column;
+  }
+  .assistant-form button {
+    align-self: stretch;
+  }
 }
 </style>

@@ -57,7 +57,7 @@ services:
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/api/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -76,6 +76,9 @@ services:
     command: node dist/server/src/worker.js
     # 给进行中的任务留出收尾时间，超时后未 ack 消息会被 broker 重投
     stop_grace_period: 30s
+    # worker 不提供 HTTP，禁用镜像自带的 /api/health/live 探针
+    healthcheck:
+      disable: true
     depends_on:
       db:
         condition: service_healthy
@@ -90,8 +93,9 @@ services:
         VITE_API_BASE: http://localhost:3001/api
     container_name: code-agent-review-client
     restart: unless-stopped
+    # 运行阶段为非 root 的 nginx，容器内监听 8080
     ports:
-      - "5173:5173"
+      - "5173:8080"
     depends_on:
       server:
         condition: service_healthy

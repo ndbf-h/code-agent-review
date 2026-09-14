@@ -14,8 +14,8 @@ const md = new MarkdownIt({
   breaks: true
 })
 
-const isError = computed(() =>
-  props.message.role === 'system' && props.message.content.startsWith('错误：')
+const isError = computed(
+  () => props.message.role === 'system' && props.message.content.startsWith('错误：')
 )
 
 const renderedContent = computed(() => {
@@ -34,7 +34,7 @@ function getRoleLabel(role: string): string {
     logic: '逻辑审查专家',
     system: '系统'
   }
-  return role === 'assistant' ? 'AI 代码助手' : (labels[role] || role)
+  return role === 'assistant' ? 'AI 代码助手' : labels[role] || role
 }
 
 function getRoleClass(role: string): string {
@@ -61,9 +61,7 @@ function getRoleClass(role: string): string {
         <p v-else>{{ message.content }}</p>
       </div>
       <div v-if="isError && onRetry" class="message-actions">
-        <el-button size="small" type="danger" plain @click="onRetry">
-          重试
-        </el-button>
+        <el-button size="small" type="danger" plain @click="onRetry"> 重试 </el-button>
       </div>
     </div>
   </div>
@@ -80,8 +78,14 @@ function getRoleClass(role: string): string {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .message-header {
@@ -108,14 +112,26 @@ function getRoleClass(role: string): string {
   background: var(--color-border);
 }
 
-.role-orch .message-role { color: var(--color-primary); }
-.role-orch .message-role::before { background: var(--color-primary); }
+.role-orch .message-role {
+  color: var(--color-primary);
+}
+.role-orch .message-role::before {
+  background: var(--color-primary);
+}
 
-.role-agent .message-role { color: var(--color-success-text); }
-.role-agent .message-role::before { background: #10b981; }
+.role-agent .message-role {
+  color: var(--color-success-text);
+}
+.role-agent .message-role::before {
+  background: #10b981;
+}
 
-.role-user .message-role { color: var(--color-warning-text); }
-.role-user .message-role::before { background: #f59e0b; }
+.role-user .message-role {
+  color: var(--color-warning-text);
+}
+.role-user .message-role::before {
+  background: #f59e0b;
+}
 
 .message-time {
   font-size: 11px;
@@ -143,8 +159,12 @@ function getRoleClass(role: string): string {
   background: linear-gradient(180deg, #10b981, #34d399);
 }
 
-.role-assistant .message-role { color: var(--color-accent); }
-.role-assistant .message-role::before { background: #8b5cf6; }
+.role-assistant .message-role {
+  color: var(--color-accent);
+}
+.role-assistant .message-role::before {
+  background: #8b5cf6;
+}
 .role-assistant .message-line {
   background: linear-gradient(180deg, #8b5cf6, #c084fc);
 }
@@ -195,8 +215,12 @@ function getRoleClass(role: string): string {
   margin: 12px 0 6px;
 }
 
-.markdown-body :deep(h1) { font-size: 17px; }
-.markdown-body :deep(h3) { font-size: 14px; }
+.markdown-body :deep(h1) {
+  font-size: 17px;
+}
+.markdown-body :deep(h3) {
+  font-size: 14px;
+}
 
 .markdown-body :deep(p) {
   margin: 0 0 6px;

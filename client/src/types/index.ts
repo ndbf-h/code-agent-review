@@ -1,4 +1,5 @@
-type TaskStatus = 'pending' | 'orchestrating' | 'reviewing' | 'summarizing' | 'completed' | 'failed' | 'cancelled'
+type TaskStatus =
+  'pending' | 'orchestrating' | 'reviewing' | 'summarizing' | 'completed' | 'failed' | 'cancelled'
 type AgentRole = 'orchestrator' | 'security' | 'performance' | 'style' | 'logic'
 type Severity = 'critical' | 'warning' | 'suggestion'
 
@@ -56,4 +57,15 @@ interface FixResult {
   changes: FixChange[]
 }
 
-export type { TaskStatus, AgentRole, Severity, Issue, ReviewReport, ChatMessage, TaskItem, TaskListResponse, FixChange, FixResult }
+export type {
+  TaskStatus,
+  AgentRole,
+  Severity,
+  Issue,
+  ReviewReport,
+  ChatMessage,
+  TaskItem,
+  TaskListResponse,
+  FixChange,
+  FixResult
+}

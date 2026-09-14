@@ -1,4 +1,8 @@
-import { getGuidelineDocuments, type GuidelineDimension, type GuidelineDocument } from './knowledge-base'
+import {
+  getGuidelineDocuments,
+  type GuidelineDimension,
+  type GuidelineDocument
+} from './knowledge-base'
 
 export interface RetrievedGuideline {
   id: string
@@ -18,7 +22,9 @@ function tokenize(value: string): string[] {
 }
 
 function scoreDocument(queryTokens: Set<string>, document: GuidelineDocument): number {
-  const terms = new Set(tokenize(`${document.title} ${document.keywords.join(' ')} ${document.content}`))
+  const terms = new Set(
+    tokenize(`${document.title} ${document.keywords.join(' ')} ${document.content}`)
+  )
   let matches = 0
   for (const token of queryTokens) {
     if (terms.has(token)) matches++
@@ -42,7 +48,12 @@ export function retrieveGuidelines(input: {
 
   return getGuidelineDocuments(input.scopeId)
     .filter(document => !dimension || !document.dimension || document.dimension === dimension)
-    .filter(document => !document.languages.length || document.languages.includes(language) || document.languages.includes('javascript'))
+    .filter(
+      document =>
+        !document.languages.length ||
+        document.languages.includes(language) ||
+        document.languages.includes('javascript')
+    )
     .map(document => ({
       id: document.id,
       title: document.title,
@@ -59,8 +70,12 @@ export function retrieveGuidelines(input: {
 
 export function formatRetrievedContext(results: RetrievedGuideline[]): string {
   if (results.length === 0) return 'No relevant coding guideline was retrieved.'
-  return results.map((result, index) => [
-    `[${index + 1}] ${result.title} (source: ${result.source}, relevance: ${result.score})`,
-    result.content
-  ].join('\n')).join('\n\n')
+  return results
+    .map((result, index) =>
+      [
+        `[${index + 1}] ${result.title} (source: ${result.source}, relevance: ${result.score})`,
+        result.content
+      ].join('\n')
+    )
+    .join('\n\n')
 }

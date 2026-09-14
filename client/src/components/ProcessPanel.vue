@@ -9,7 +9,7 @@ import AgentProgressPanel from './AgentProgressPanel.vue'
  */
 const store = useReviewStore()
 
-const props = defineProps<{
+defineProps<{
   collapsed?: boolean
 }>()
 

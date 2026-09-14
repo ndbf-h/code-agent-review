@@ -5,3 +5,5 @@ dist/
 .env.local
 server/.data/
 .idea/
+# 验收智能体使用的 diff 快照，不入库
+.qa/

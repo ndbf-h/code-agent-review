@@ -70,7 +70,10 @@ function toggleDimension(key: string) {
 }
 
 const dimLabels: Record<string, string> = {
-  security: '安全', performance: '性能', style: '规范', logic: '逻辑'
+  security: '安全',
+  performance: '性能',
+  style: '规范',
+  logic: '逻辑'
 }
 
 /** issue → 维度 key 的映射（用于维度图块筛选与徽章展示） */
@@ -87,7 +90,11 @@ const issueDimension = computed(() => {
 const filteredIssues = computed(() =>
   props.report.issues.filter(issue => {
     if (activeSeverity.value !== 'all' && issue.severity !== activeSeverity.value) return false
-    if (activeDimension.value !== 'all' && issueDimension.value.get(issue) !== activeDimension.value) return false
+    if (
+      activeDimension.value !== 'all' &&
+      issueDimension.value.get(issue) !== activeDimension.value
+    )
+      return false
     return true
   })
 )
@@ -154,9 +161,10 @@ async function requestFix() {
       ElMessage.success(`已修复 ${data.changes?.length || 0} 处问题`)
     }
   } catch (err) {
-    const message = axios.isAxiosError(err) && err.response?.data?.error
-      ? err.response.data.error
-      : '修复请求失败，请检查网络后重试'
+    const message =
+      axios.isAxiosError(err) && err.response?.data?.error
+        ? err.response.data.error
+        : '修复请求失败，请检查网络后重试'
     fixError.value = message
   } finally {
     isFixing.value = false
@@ -235,8 +243,14 @@ async function requestFix() {
     <!-- 3. 问题列表（响应图块筛选） -->
     <div v-if="filteredIssues.length > 0" class="issue-list">
       <div class="section-label">
-        {{ filteredIssues.length === report.issues.length ? `发现 ${report.issues.length} 个问题` : `筛选出 ${filteredIssues.length} / ${report.issues.length} 个问题` }}
-        <span v-if="activeSeverity !== 'all' || activeDimension !== 'all'" class="filter-hint">（点击图块可清除筛选）</span>
+        {{
+          filteredIssues.length === report.issues.length
+            ? `发现 ${report.issues.length} 个问题`
+            : `筛选出 ${filteredIssues.length} / ${report.issues.length} 个问题`
+        }}
+        <span v-if="activeSeverity !== 'all' || activeDimension !== 'all'" class="filter-hint"
+          >（点击图块可清除筛选）</span
+        >
       </div>
       <div
         v-for="(issue, idx) in filteredIssues"
@@ -272,12 +286,7 @@ async function requestFix() {
     <div v-if="code && language && store.taskId" class="fix-section">
       <div class="fix-divider"></div>
       <div class="fix-actions">
-        <el-button
-          type="warning"
-          :loading="isFixing"
-          :disabled="isFixing"
-          @click="requestFix"
-        >
+        <el-button type="warning" :loading="isFixing" :disabled="isFixing" @click="requestFix">
           {{ isFixing ? '修复中...' : '🔧 一键修复' }}
         </el-button>
       </div>
@@ -292,9 +301,7 @@ async function requestFix() {
         class="fix-alert"
       >
         <template #default>
-          <el-button size="small" type="primary" @click="requestFix">
-            重试
-          </el-button>
+          <el-button size="small" type="primary" @click="requestFix"> 重试 </el-button>
         </template>
       </el-alert>
 
@@ -408,15 +415,33 @@ async function requestFix() {
   color: var(--color-text-secondary);
 }
 
-.sev-tile.critical .tile-num { color: var(--color-danger-text); }
-.sev-tile.warning .tile-num { color: var(--color-warning-text); }
-.sev-tile.suggestion .tile-num { color: var(--color-info-text); }
+.sev-tile.critical .tile-num {
+  color: var(--color-danger-text);
+}
+.sev-tile.warning .tile-num {
+  color: var(--color-warning-text);
+}
+.sev-tile.suggestion .tile-num {
+  color: var(--color-info-text);
+}
 
-.sev-tile:hover { border-color: var(--color-border); box-shadow: var(--shadow-sm); }
+.sev-tile:hover {
+  border-color: var(--color-border);
+  box-shadow: var(--shadow-sm);
+}
 
-.sev-tile.critical.active { border-color: var(--color-danger); background: var(--color-danger-bg); }
-.sev-tile.warning.active { border-color: var(--color-warning); background: var(--color-warning-bg); }
-.sev-tile.suggestion.active { border-color: var(--color-info); background: var(--color-info-bg); }
+.sev-tile.critical.active {
+  border-color: var(--color-danger);
+  background: var(--color-danger-bg);
+}
+.sev-tile.warning.active {
+  border-color: var(--color-warning);
+  background: var(--color-warning-bg);
+}
+.sev-tile.suggestion.active {
+  border-color: var(--color-info);
+  background: var(--color-info-bg);
+}
 
 .sev-tile.reset {
   min-width: 34px;
@@ -444,7 +469,10 @@ async function requestFix() {
   transition: all 0.12s ease;
 }
 
-.dim-chip:hover { border-color: var(--color-border); box-shadow: var(--shadow-sm); }
+.dim-chip:hover {
+  border-color: var(--color-border);
+  box-shadow: var(--shadow-sm);
+}
 
 .dim-chip.active {
   border-color: var(--color-primary);
@@ -505,7 +533,9 @@ async function requestFix() {
   padding: 8px 10px;
   border-radius: 6px;
   cursor: pointer;
-  transition: background 0.12s ease, border-color 0.12s ease;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease;
   border-bottom: 1px solid var(--color-border-light);
 }
 
@@ -531,9 +561,18 @@ async function requestFix() {
   flex-shrink: 0;
 }
 
-.sev-critical { background: var(--color-danger-bg); color: var(--color-danger-text); }
-.sev-warning { background: var(--color-warning-bg); color: var(--color-warning-text); }
-.sev-suggestion { background: var(--color-info-bg); color: var(--color-info-text); }
+.sev-critical {
+  background: var(--color-danger-bg);
+  color: var(--color-danger-text);
+}
+.sev-warning {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+}
+.sev-suggestion {
+  background: var(--color-info-bg);
+  color: var(--color-info-text);
+}
 
 .issue-sev.small {
   padding: 1px 6px;

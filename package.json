@@ -5,9 +5,23 @@
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "cd server && npm run dev",
     "dev:client": "cd client && npm run dev",
-    "install:all": "cd server && npm install && cd ../client && npm install"
+    "install:all": "cd server && npm install && cd ../client && npm install",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"server/src/**/*.ts\" \"client/src/**/*.{ts,vue}\" \"shared/**/*.ts\"",
+    "format:check": "prettier --check \"server/src/**/*.ts\" \"client/src/**/*.{ts,vue}\" \"shared/**/*.ts\"",
+    "typecheck": "npm run typecheck --prefix server && npm run typecheck --prefix client",
+    "test": "npm test --prefix server && npm test --prefix client"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "@eslint/js": "^10.0.1",
+    "concurrently": "^8.2.2",
+    "eslint": "^10.10.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-vue": "^10.11.0",
+    "globals": "^17.12.0",
+    "prettier": "^3.9.6",
+    "typescript-eslint": "^8.70.0",
+    "vue-eslint-parser": "^10.4.1"
   }
 }

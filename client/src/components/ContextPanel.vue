@@ -24,12 +24,18 @@ type Tab = 'issue' | 'assistant' | 'metrics'
 const activeTab = ref<Tab>('issue')
 
 // 选中新问题时自动切到详情 tab
-watch(() => props.selectedIssue, issue => {
-  if (issue) activeTab.value = 'issue'
-})
+watch(
+  () => props.selectedIssue,
+  issue => {
+    if (issue) activeTab.value = 'issue'
+  }
+)
 
 const dimLabels: Record<string, string> = {
-  security: '安全', performance: '性能', style: '规范', logic: '逻辑'
+  security: '安全',
+  performance: '性能',
+  style: '规范',
+  logic: '逻辑'
 }
 
 function severityLabel(severity: string): string {
@@ -85,7 +91,9 @@ const hasAssistant = computed(() => !!props.taskId && !!props.report)
           指标
         </button>
       </div>
-      <button type="button" class="panel-close" aria-label="关闭面板" @click="emit('close')">✕</button>
+      <button type="button" class="panel-close" aria-label="关闭面板" @click="emit('close')">
+        ✕
+      </button>
     </div>
 
     <div class="panel-scroll">
@@ -225,9 +233,18 @@ const hasAssistant = computed(() => !!props.taskId && !!props.report)
   border-radius: 12px;
 }
 
-.sev-critical { background: var(--color-danger-bg); color: var(--color-danger-text); }
-.sev-warning { background: var(--color-warning-bg); color: var(--color-warning-text); }
-.sev-suggestion { background: var(--color-info-bg); color: var(--color-info-text); }
+.sev-critical {
+  background: var(--color-danger-bg);
+  color: var(--color-danger-text);
+}
+.sev-warning {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+}
+.sev-suggestion {
+  background: var(--color-info-bg);
+  color: var(--color-info-text);
+}
 
 .dim-badge,
 .loc-badge {

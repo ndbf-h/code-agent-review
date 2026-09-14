@@ -6,7 +6,14 @@ import { registerAllTools } from '../tools/index'
 import { getTokenUsage, resetTokenUsage } from '../agent/llm-client'
 import { loadJsonl, validateReviewSample } from './dataset'
 import { detectInjectionCompliance, evaluateSampleMatch, summarizeReview } from './matcher'
-import type { CodeReviewSample, Dimension, EvalTier, ReportIssueLike, ReviewRunResult, ReviewSuiteSummary } from './types'
+import type {
+  CodeReviewSample,
+  Dimension,
+  EvalTier,
+  ReportIssueLike,
+  ReviewRunResult,
+  ReviewSuiteSummary
+} from './types'
 
 export interface ReviewSuiteOptions {
   datasetPath: string
@@ -39,7 +46,9 @@ export async function runReviewSuite(options: ReviewSuiteOptions): Promise<Revie
     samples = samples.slice(0, options.limit)
   }
 
-  console.log(`[eval:review] 数据集共 ${all.length} 个样本，本次运行 ${samples.length} 个（串行执行）`)
+  console.log(
+    `[eval:review] 数据集共 ${all.length} 个样本，本次运行 ${samples.length} 个（串行执行）`
+  )
 
   const results: ReviewRunResult[] = []
   for (let i = 0; i < samples.length; i++) {
@@ -59,7 +68,10 @@ export async function runReviewSuite(options: ReviewSuiteOptions): Promise<Revie
           suggestion: issue.suggestion
         }))
       }
-      const { expectedMatched, extraFindings, dimensionMismatchCount } = evaluateSampleMatch(sample, agentIssues)
+      const { expectedMatched, extraFindings, dimensionMismatchCount } = evaluateSampleMatch(
+        sample,
+        agentIssues
+      )
       const matchedCount = expectedMatched.filter(Boolean).length
       results.push({
         sampleId: sample.id,
@@ -69,14 +81,20 @@ export async function runReviewSuite(options: ReviewSuiteOptions): Promise<Revie
         score: report.score,
         reviewStatus: report.reviewStatus,
         issues: (report.issues || []).map(issue => ({
-          line: issue.line, severity: issue.severity, category: issue.category,
-          message: issue.message, suggestion: issue.suggestion
+          line: issue.line,
+          severity: issue.severity,
+          category: issue.category,
+          message: issue.message,
+          suggestion: issue.suggestion
         })),
         agentIssues,
         expectedMatched,
         extraFindings,
         dimensionMismatchCount,
-        suspectedInjectionCompliance: detectInjectionCompliance(sample, { score: report.score, matchedCount }),
+        suspectedInjectionCompliance: detectInjectionCompliance(sample, {
+          score: report.score,
+          matchedCount
+        }),
         durationMs: Date.now() - startedAt
       })
       console.log(`完成 score=${report.score} 命中 ${matchedCount}/${expectedMatched.length}`)
@@ -124,12 +142,18 @@ export function rematchSuite(fromPath: string): ReviewSuiteOutput {
   for (const result of payload.results) {
     const sample = sampleById.get(result.sampleId)
     if (!sample) continue
-    const { expectedMatched, extraFindings, dimensionMismatchCount } = evaluateSampleMatch(sample, result.agentIssues)
+    const { expectedMatched, extraFindings, dimensionMismatchCount } = evaluateSampleMatch(
+      sample,
+      result.agentIssues
+    )
     result.expectedMatched = expectedMatched
     result.extraFindings = extraFindings
     result.dimensionMismatchCount = dimensionMismatchCount
     const matchedCount = expectedMatched.filter(Boolean).length
-    result.suspectedInjectionCompliance = detectInjectionCompliance(sample, { score: result.score, matchedCount })
+    result.suspectedInjectionCompliance = detectInjectionCompliance(sample, {
+      score: result.score,
+      matchedCount
+    })
   }
   return {
     summary: summarizeReview(payload.results),

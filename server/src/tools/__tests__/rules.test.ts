@@ -3,7 +3,7 @@ import { scanCode, securityRules } from '../rules'
 
 describe('Security Rules', () => {
   it('should detect SQL injection via string concat', () => {
-    const code = "const sql = \"SELECT * FROM users WHERE id = '\" + userId + \"'\""
+    const code = 'const sql = "SELECT * FROM users WHERE id = \'" + userId + "\'"'
     const matches = scanCode(code, securityRules, 'javascript')
     const sqlInjection = matches.filter(m => m.category === 'SQL 注入')
     expect(sqlInjection.length).toBeGreaterThanOrEqual(1)
@@ -26,7 +26,6 @@ describe('Security Rules', () => {
   it('should return empty for clean code', () => {
     const code = 'const x = 1 + 2'
     const matches = scanCode(code, securityRules)
-    const criticalMatches = matches.filter(m => m.severity !== 'suggestion')
     // 允许 suggestion 级别的通用匹配（如 console.log），但不应有高危
     const sqlEval = matches.filter(m => ['SQL 注入', '代码注入', '硬编码密钥'].includes(m.category))
     expect(sqlEval.length).toBe(0)

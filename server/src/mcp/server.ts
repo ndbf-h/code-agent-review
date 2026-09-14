@@ -48,7 +48,10 @@ function buildMcpServer(): Server {
       const result = await Promise.race([
         tool.execute((request.params.arguments || {}) as Record<string, unknown>),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error(`工具执行超时（${TOOL_CALL_TIMEOUT_MS / 1000}s）`)), TOOL_CALL_TIMEOUT_MS)
+          setTimeout(
+            () => reject(new Error(`工具执行超时（${TOOL_CALL_TIMEOUT_MS / 1000}s）`)),
+            TOOL_CALL_TIMEOUT_MS
+          )
         )
       ])
       return { content: [{ type: 'text', text: result }] }
@@ -90,7 +93,10 @@ export function mountMcpEndpoint(app: Express): void {
   const methodNotAllowed = (_req: Request, res: Response) => {
     res.status(405).json({
       jsonrpc: '2.0',
-      error: { code: -32000, message: 'Method not allowed（本服务为无状态模式，不支持 SSE 流/会话终止）' }
+      error: {
+        code: -32000,
+        message: 'Method not allowed（本服务为无状态模式，不支持 SSE 流/会话终止）'
+      }
     })
   }
   app.get('/mcp', methodNotAllowed)

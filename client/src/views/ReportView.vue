@@ -54,9 +54,10 @@ async function fetchReport() {
     task.value = data.task
     reportData.value = data.report?.content || null
   } catch (err) {
-    error.value = axios.isAxiosError(err) && err.response?.data?.error
-      ? err.response.data.error
-      : '加载报告失败，请稍后重试。'
+    error.value =
+      axios.isAxiosError(err) && err.response?.data?.error
+        ? err.response.data.error
+        : '加载报告失败，请稍后重试。'
   } finally {
     loading.value = false
   }
@@ -151,7 +152,9 @@ const totalIssues = computed(() => reportData.value?.issues.length || 0)
 
 const topIssue = computed(() => {
   const priority: Record<Severity, number> = { critical: 0, warning: 1, suggestion: 2 }
-  return [...(reportData.value?.issues || [])].sort((a, b) => priority[a.severity] - priority[b.severity])[0]
+  return [...(reportData.value?.issues || [])].sort(
+    (a, b) => priority[a.severity] - priority[b.severity]
+  )[0]
 })
 
 const codeStats = computed(() => {
@@ -179,9 +182,10 @@ async function requestFix() {
     const count = data.changes?.length || 0
     ElMessage.success(count === 0 ? '当前代码无需自动修复' : `已生成 ${count} 处修复建议`)
   } catch (err) {
-    fixError.value = axios.isAxiosError(err) && err.response?.data?.error
-      ? err.response.data.error
-      : '修复请求失败，请检查网络后重试。'
+    fixError.value =
+      axios.isAxiosError(err) && err.response?.data?.error
+        ? err.response.data.error
+        : '修复请求失败，请检查网络后重试。'
   } finally {
     isFixing.value = false
   }
@@ -493,10 +497,18 @@ h1 {
   font-family: var(--font-mono);
 }
 
-.summary-card.critical strong { color: var(--color-danger-text); }
-.summary-card.warning strong { color: var(--color-warning-text); }
-.summary-card.suggestion strong { color: var(--color-info-text); }
-.summary-card.neutral strong { color: var(--color-text); }
+.summary-card.critical strong {
+  color: var(--color-danger-text);
+}
+.summary-card.warning strong {
+  color: var(--color-warning-text);
+}
+.summary-card.suggestion strong {
+  color: var(--color-info-text);
+}
+.summary-card.neutral strong {
+  color: var(--color-text);
+}
 
 .section-block {
   background: var(--color-surface);
@@ -542,7 +554,9 @@ h1 {
   padding: 14px;
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.14s ease, background 0.14s ease;
+  transition:
+    border-color 0.14s ease,
+    background 0.14s ease;
 }
 
 .dimension-card:hover,
@@ -628,9 +642,15 @@ h1 {
   background: var(--color-surface-2);
 }
 
-.issue-critical { border-left-color: var(--color-danger); }
-.issue-warning { border-left-color: var(--color-warning); }
-.issue-suggestion { border-left-color: var(--color-info); }
+.issue-critical {
+  border-left-color: var(--color-danger);
+}
+.issue-warning {
+  border-left-color: var(--color-warning);
+}
+.issue-suggestion {
+  border-left-color: var(--color-info);
+}
 
 .issue-top {
   display: flex;
@@ -647,9 +667,18 @@ h1 {
   white-space: nowrap;
 }
 
-.sev-critical { color: var(--color-danger-text); background: var(--color-danger-bg); }
-.sev-warning { color: var(--color-warning-text); background: var(--color-warning-bg); }
-.sev-suggestion { color: var(--color-info-text); background: var(--color-info-bg); }
+.sev-critical {
+  color: var(--color-danger-text);
+  background: var(--color-danger-bg);
+}
+.sev-warning {
+  color: var(--color-warning-text);
+  background: var(--color-warning-bg);
+}
+.sev-suggestion {
+  color: var(--color-info-text);
+  background: var(--color-info-bg);
+}
 
 .issue-category {
   color: var(--color-text-secondary);
@@ -746,7 +775,12 @@ h1 {
   width: 96px;
   height: 96px;
   border-radius: 50%;
-  background: linear-gradient(90deg, var(--color-skeleton-from) 25%, var(--color-skeleton-to) 50%, var(--color-skeleton-from) 75%);
+  background: linear-gradient(
+    90deg,
+    var(--color-skeleton-from) 25%,
+    var(--color-skeleton-to) 50%,
+    var(--color-skeleton-from) 75%
+  );
   background-size: 200% 100%;
   animation: shimmer 1.2s ease-in-out infinite;
 }
@@ -754,17 +788,30 @@ h1 {
 .skeleton-line {
   height: 12px;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--color-skeleton-from) 25%, var(--color-skeleton-to) 50%, var(--color-skeleton-from) 75%);
+  background: linear-gradient(
+    90deg,
+    var(--color-skeleton-from) 25%,
+    var(--color-skeleton-to) 50%,
+    var(--color-skeleton-from) 75%
+  );
   background-size: 200% 100%;
   animation: shimmer 1.2s ease-in-out infinite;
 }
 
-.w-64 { width: 64%; }
-.w-42 { width: 42%; }
+.w-64 {
+  width: 64%;
+}
+.w-42 {
+  width: 42%;
+}
 
 @keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 .inline-empty {

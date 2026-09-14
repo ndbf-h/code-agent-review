@@ -6,7 +6,11 @@ import { retrieveGuidelinesHybrid } from '../hybrid-retriever'
 
 describe('tokenizeForSearch CJK 感知分词', () => {
   it('ASCII 词元保留且小写化', () => {
-    expect(tokenizeForSearch('SQL Injection Prevention')).toEqual(['sql', 'injection', 'prevention'])
+    expect(tokenizeForSearch('SQL Injection Prevention')).toEqual([
+      'sql',
+      'injection',
+      'prevention'
+    ])
   })
 
   it('中文切为二元组', () => {

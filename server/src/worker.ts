@@ -10,6 +10,9 @@ import { startTaskConsumer } from './queue/consumer'
 import { startSweeper } from './queue/sweeper'
 import { initTracing, shutdownTracing } from './observability/tracing'
 import { mountExternalMcpTools } from './mcp/client'
+import { createLogger } from './logger'
+
+const logger = createLogger('worker')
 
 /**
  * Worker 独立进程入口：只消费 RabbitMQ 任务并执行审查，不提供 HTTP 服务。
@@ -19,7 +22,7 @@ async function main(): Promise<void> {
   const config = loadConfig()
 
   await initDb()
-  console.log('[worker] Database initialized')
+  logger.info('Database initialized')
   await loadGuidelinesFromDatabase()
   registerAllTools()
   void mountExternalMcpTools()
@@ -36,7 +39,7 @@ async function main(): Promise<void> {
   const shutdown = async (signal: string): Promise<void> => {
     if (shuttingDown) return
     shuttingDown = true
-    console.log(`[worker] 收到 ${signal}，开始优雅关闭`)
+    logger.info(`收到 ${signal}，开始优雅关闭`)
     try {
       await sweeper.stop()
       await consumer.stop(25_000)
@@ -50,10 +53,10 @@ async function main(): Promise<void> {
   process.on('SIGTERM', () => void shutdown('SIGTERM'))
   process.on('SIGINT', () => void shutdown('SIGINT'))
 
-  console.log('[worker] 已启动，等待任务...')
+  logger.info('已启动，等待任务...', { env: config.env, prefetch: config.maxConcurrentTasks })
 }
 
 main().catch(error => {
-  console.error('[worker] 启动失败:', error)
+  logger.error('启动失败', error)
   process.exit(1)
 })

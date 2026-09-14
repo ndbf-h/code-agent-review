@@ -1,6 +1,5 @@
 import type { Tool } from '../agent/tool-registry'
-import { scanCode, getRulesByDimension, getAllRules } from './rules'
-import type { RuleMatch } from './rules'
+import { scanCode, getRulesByDimension } from './rules'
 
 // ═══════════════════════════════════════════════════════════════
 // 编排工具 — 全部真实化，不再返回硬编码占位数据
@@ -14,10 +13,14 @@ import type { RuleMatch } from './rules'
 const decomposeTask: Tool = {
   definition: {
     name: 'decomposeTask',
-    description: '对代码进行安全/性能/风格/逻辑四维度预扫描，返回各维度潜在问题数量、评分和重点关注项，用于制定审查策略',
+    description:
+      '对代码进行安全/性能/风格/逻辑四维度预扫描，返回各维度潜在问题数量、评分和重点关注项，用于制定审查策略',
     parameters: {
       code: { type: 'string', description: '待审查的代码' },
-      language: { type: 'string', description: '编程语言（javascript/typescript/python/go/java 等）' }
+      language: {
+        type: 'string',
+        description: '编程语言（javascript/typescript/python/go/java 等）'
+      }
     }
   },
   async execute(input: Record<string, unknown>): Promise<string> {
@@ -33,15 +36,18 @@ const decomposeTask: Tool = {
       logic: '逻辑审查'
     }
 
-    const scanResults: Record<string, {
-      label: string
-      totalIssues: number
-      critical: number
-      warning: number
-      suggestion: number
-      score: number
-      topIssues: { line: number; severity: string; category: string; message: string }[]
-    }> = {}
+    const scanResults: Record<
+      string,
+      {
+        label: string
+        totalIssues: number
+        critical: number
+        warning: number
+        suggestion: number
+        score: number
+        topIssues: { line: number; severity: string; category: string; message: string }[]
+      }
+    > = {}
 
     let grandTotal = 0
 
@@ -90,9 +96,10 @@ const decomposeTask: Tool = {
       summary: {
         totalIssuesFound: grandTotal,
         hotDimensions,
-        recommendation: hotDimensions.length > 0
-          ? `建议重点关注 ${hotDimensions.map(d => scanResults[d].label).join('、')} 维度，这些维度预扫描发现问题较多`
-          : '各维度预扫描未发现明显高危问题，建议均衡审查'
+        recommendation:
+          hotDimensions.length > 0
+            ? `建议重点关注 ${hotDimensions.map(d => scanResults[d].label).join('、')} 维度，这些维度预扫描发现问题较多`
+            : '各维度预扫描未发现明显高危问题，建议均衡审查'
       }
     })
   }
@@ -109,7 +116,10 @@ const assignAgent: Tool = {
     description: '为指定审查维度配置专门的审查策略，基于预扫描结果生成关注重点和工具推荐',
     parameters: {
       dimension: { type: 'string', description: '审查维度：security、performance、style、logic' },
-      preScanFindings: { type: 'string', description: '该维度的预扫描结果（来自 decomposeTask 的 JSON 片段）' },
+      preScanFindings: {
+        type: 'string',
+        description: '该维度的预扫描结果（来自 decomposeTask 的 JSON 片段）'
+      },
       language: { type: 'string', description: '编程语言' }
     }
   },
@@ -135,12 +145,15 @@ const assignAgent: Tool = {
     const topCategories = preScanData.topIssues?.map(i => i.category) || []
 
     // 根据维度生成审查策略
-    const strategies: Record<string, {
-      tools: string[]
-      focusAreas: string[]
-      severity: string
-      approach: string
-    }> = {
+    const strategies: Record<
+      string,
+      {
+        tools: string[]
+        focusAreas: string[]
+        severity: string
+        approach: string
+      }
+    > = {
       security: {
         tools: ['analyzeCode', 'checkPattern', 'validateSyntax'],
         focusAreas: [
@@ -152,9 +165,10 @@ const assignAgent: Tool = {
           '认证与授权缺陷'
         ],
         severity: criticalCount > 0 ? 'high' : 'normal',
-        approach: criticalCount > 3
-          ? '代码中发现多个高危安全问题，建议逐行审查所有外部输入点'
-          : '按标准安全审查清单逐项检查'
+        approach:
+          criticalCount > 3
+            ? '代码中发现多个高危安全问题，建议逐行审查所有外部输入点'
+            : '按标准安全审查清单逐项检查'
       },
       performance: {
         tools: ['analyzeCode', 'checkPattern', 'checkComplexity'],
@@ -166,9 +180,10 @@ const assignAgent: Tool = {
           '大数据集处理策略'
         ],
         severity: warningCount > 3 ? 'high' : 'normal',
-        approach: warningCount > 3
-          ? '检测到多个性能隐患，建议重点审查数据访问层和循环逻辑'
-          : '按标准性能审查清单逐项检查'
+        approach:
+          warningCount > 3
+            ? '检测到多个性能隐患，建议重点审查数据访问层和循环逻辑'
+            : '按标准性能审查清单逐项检查'
       },
       style: {
         tools: ['analyzeCode', 'checkPattern', 'checkComplexity'],
@@ -207,12 +222,13 @@ const assignAgent: Tool = {
 
     return JSON.stringify({
       dimension,
-      label: {
-        security: '安全审查',
-        performance: '性能审查',
-        style: '代码规范',
-        logic: '逻辑审查'
-      }[dimension] || dimension,
+      label:
+        {
+          security: '安全审查',
+          performance: '性能审查',
+          style: '代码规范',
+          logic: '逻辑审查'
+        }[dimension] || dimension,
       language,
       strategy,
       preScanSummary: {
@@ -233,17 +249,27 @@ const collectResults: Tool = {
     name: 'collectResults',
     description: '聚合所有维度的审查结果，对跨维度重复发现进行去重合并，生成综合问题列表',
     parameters: {
-      dimensionResults: { type: 'string', description: '各维度审查结果的 JSON 数组，每项包含 dimension、issues、score' }
+      dimensionResults: {
+        type: 'string',
+        description: '各维度审查结果的 JSON 数组，每项包含 dimension、issues、score'
+      }
     }
   },
   async execute(input: Record<string, unknown>): Promise<string> {
     interface DimResult {
       dimension: string
-      issues: { line: number; column?: number; severity: string; category: string; message: string; suggestion: string }[]
+      issues: {
+        line: number
+        column?: number
+        severity: string
+        category: string
+        message: string
+        suggestion: string
+      }[]
       score: number
     }
 
-    let results: DimResult[] = []
+    let results: DimResult[]
     try {
       results = JSON.parse((input.dimensionResults as string) || '[]')
     } catch {
@@ -279,7 +305,12 @@ const collectResults: Tool = {
     })
 
     // 综合评分（加权平均，安全权重大于其他维度）
-    const weights: Record<string, number> = { security: 1.5, performance: 1.0, style: 0.8, logic: 1.2 }
+    const weights: Record<string, number> = {
+      security: 1.5,
+      performance: 1.0,
+      style: 0.8,
+      logic: 1.2
+    }
     let weightedSum = 0
     let totalWeight = 0
     for (const r of results) {
@@ -308,7 +339,8 @@ const collectResults: Tool = {
 const generateReport: Tool = {
   definition: {
     name: 'generateReport',
-    description: '基于聚合后的审查发现生成结构化最终报告，包含执行摘要、各维度评分、问题优先级排序和修复路线图',
+    description:
+      '基于聚合后的审查发现生成结构化最终报告，包含执行摘要、各维度评分、问题优先级排序和修复路线图',
     parameters: {
       collectionResult: { type: 'string', description: 'collectResults 的输出 JSON' },
       codeStats: { type: 'string', description: '代码统计信息（行数/函数数/语言等）' },
@@ -357,13 +389,13 @@ const generateReport: Tool = {
     }
 
     // 生成执行摘要
-    const healthLabel = collection.overallScore >= 80 ? '良好'
-      : collection.overallScore >= 60 ? '一般'
-        : '较差'
+    const healthLabel =
+      collection.overallScore >= 80 ? '良好' : collection.overallScore >= 60 ? '一般' : '较差'
 
-    const summary = collection.totalIssues > 0
-      ? `代码健康度 ${healthLabel}（${collection.overallScore}/100），发现 ${collection.totalIssues} 个问题（${collection.critical} 高危、${collection.warning} 警告、${collection.suggestion} 建议）`
-      : `代码健康度良好（${collection.overallScore}/100），未发现明显问题`
+    const summary =
+      collection.totalIssues > 0
+        ? `代码健康度 ${healthLabel}（${collection.overallScore}/100），发现 ${collection.totalIssues} 个问题（${collection.critical} 高危、${collection.warning} 警告、${collection.suggestion} 建议）`
+        : `代码健康度良好（${collection.overallScore}/100），未发现明显问题`
 
     return JSON.stringify({
       reportId: `report-${Date.now()}`,

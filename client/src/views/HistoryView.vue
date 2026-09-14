@@ -48,9 +48,10 @@ async function fetchTasks(isLoadMore = false) {
     tasks.value = isLoadMore ? [...tasks.value, ...data.tasks] : data.tasks
     total.value = data.total
   } catch (err) {
-    error.value = axios.isAxiosError(err) && err.response?.data?.error
-      ? err.response.data.error
-      : '加载历史记录失败，请检查后端服务是否正常运行。'
+    error.value =
+      axios.isAxiosError(err) && err.response?.data?.error
+        ? err.response.data.error
+        : '加载历史记录失败，请检查后端服务是否正常运行。'
   } finally {
     loading.value = false
     loadingMore.value = false
@@ -116,10 +117,14 @@ const filteredTasks = computed(() => {
   return tasks.value.filter(task => task.status === activeStatus.value)
 })
 
-const completedCount = computed(() => tasks.value.filter(task => task.status === 'completed').length)
+const completedCount = computed(
+  () => tasks.value.filter(task => task.status === 'completed').length
+)
 const failedCount = computed(() => tasks.value.filter(task => task.status === 'failed').length)
 const averageScore = computed(() => {
-  const scored = tasks.value.filter(task => typeof task.score === 'number') as Array<TaskItem & { score: number }>
+  const scored = tasks.value.filter(task => typeof task.score === 'number') as Array<
+    TaskItem & { score: number }
+  >
   if (scored.length === 0) return '--'
   const sum = scored.reduce((acc, task) => acc + task.score, 0)
   return Math.round(sum / scored.length)
@@ -145,9 +150,7 @@ watch(activeStatus, () => {
         <h1>审查任务</h1>
         <p class="subtitle">按任务状态、得分和提交时间快速回看历史审查记录。</p>
       </div>
-      <el-button type="primary" @click="router.push({ name: 'home' })">
-        新建审查
-      </el-button>
+      <el-button type="primary" @click="router.push({ name: 'home' })"> 新建审查 </el-button>
     </section>
 
     <section class="metric-strip">
@@ -235,9 +238,7 @@ watch(activeStatus, () => {
         <span class="task-date">{{ formatDate(task.createdAt) }}</span>
       </button>
 
-      <div v-if="filteredTasks.length === 0" class="inline-empty">
-        当前筛选条件下没有任务。
-      </div>
+      <div v-if="filteredTasks.length === 0" class="inline-empty">当前筛选条件下没有任务。</div>
     </section>
 
     <div v-if="!loading && hasMore" class="load-more">
@@ -381,7 +382,9 @@ h1 {
   background: var(--color-surface);
   padding: 16px 18px;
   cursor: pointer;
-  transition: background 0.14s ease, box-shadow 0.14s ease;
+  transition:
+    background 0.14s ease,
+    box-shadow 0.14s ease;
 }
 
 .task-row:last-child {
@@ -451,10 +454,18 @@ h1 {
   font-weight: 800;
 }
 
-.score-good { color: var(--color-success-text); }
-.score-warn { color: var(--color-warning-text); }
-.score-bad { color: var(--color-danger-text); }
-.score-muted { color: var(--color-text-muted); }
+.score-good {
+  color: var(--color-success-text);
+}
+.score-warn {
+  color: var(--color-warning-text);
+}
+.score-bad {
+  color: var(--color-danger-text);
+}
+.score-muted {
+  color: var(--color-text-muted);
+}
 
 .task-date,
 .mobile-date {
@@ -499,7 +510,12 @@ h1 {
 .skeleton-line {
   height: 12px;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--color-skeleton-from) 25%, var(--color-skeleton-to) 50%, var(--color-skeleton-from) 75%);
+  background: linear-gradient(
+    90deg,
+    var(--color-skeleton-from) 25%,
+    var(--color-skeleton-to) 50%,
+    var(--color-skeleton-from) 75%
+  );
   background-size: 200% 100%;
   animation: shimmer 1.2s ease-in-out infinite;
   margin-bottom: 10px;
@@ -509,13 +525,23 @@ h1 {
   margin-bottom: 0;
 }
 
-.w-72 { width: 72%; }
-.w-48 { width: 48%; }
-.w-32 { width: 32%; }
+.w-72 {
+  width: 72%;
+}
+.w-48 {
+  width: 48%;
+}
+.w-32 {
+  width: 32%;
+}
 
 @keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 .inline-empty {

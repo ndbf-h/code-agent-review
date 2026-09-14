@@ -23,7 +23,7 @@ const PATTERNS: Record<string, LanguagePattern> = {
       /:\s*(string|number|boolean|void|any|never|unknown|bigint)\b/,
       /\benum\s+\w+/,
       /\bas\s+(string|number|boolean)\b/,
-      /\bReadonlyArray\b|\bPartial\b|\bRequired\b|\bPick\b|\bOmit\b/,
+      /\bReadonlyArray\b|\bPartial\b|\bRequired\b|\bPick\b|\bOmit\b/
     ],
     hints: [
       /\bconst\s+\w+/,
@@ -31,8 +31,8 @@ const PATTERNS: Record<string, LanguagePattern> = {
       /\bimport\s+\{/,
       /\bexport\s+(default\s+)?(class|function|const|interface|type)\b/,
       /=>\s*\{/,
-      /\.tsx?\b/,
-    ],
+      /\.tsx?\b/
+    ]
   },
   java: {
     signatures: [
@@ -41,7 +41,7 @@ const PATTERNS: Record<string, LanguagePattern> = {
       /import\s+java\./,
       /\bSystem\.out\./,
       /\bclass\s+\w+\s+extends\b/,
-      /\bprivate\s+(static\s+)?final\b/,
+      /\bprivate\s+(static\s+)?final\b/
     ],
     hints: [
       /\bpublic\s+class\b/,
@@ -49,8 +49,8 @@ const PATTERNS: Record<string, LanguagePattern> = {
       /\.equals\(/,
       /\bHashMap\b|\bArrayList\b|\bLinkedList\b/,
       /\bnew\s+\w+\(/,
-      /;\s*$/m,
-    ],
+      /;\s*$/m
+    ]
   },
   python: {
     signatures: [
@@ -59,7 +59,7 @@ const PATTERNS: Record<string, LanguagePattern> = {
       /\bprint\(/,
       /\bself\.\w+/,
       /:\s*$/m,
-      /\b__init__\b|\b__name__\b|\b__main__\b/,
+      /\b__init__\b|\b__name__\b|\b__main__\b/
     ],
     hints: [
       /\bclass\s+\w+:/,
@@ -67,8 +67,8 @@ const PATTERNS: Record<string, LanguagePattern> = {
       /^\s*#.*$/m,
       /\bNone\b|\bTrue\b|\bFalse\b/,
       /\bif\s+__name__\b/,
-      /\braise\s+\w+/,
-    ],
+      /\braise\s+\w+/
+    ]
   },
   javascript: {
     signatures: [
@@ -77,7 +77,7 @@ const PATTERNS: Record<string, LanguagePattern> = {
       /\bwindow\.\w+/,
       /\brequire\(/,
       /\bmodule\.exports\b/,
-      /\baddEventListener\(/,
+      /\baddEventListener\(/
     ],
     hints: [
       /\bfunction\s+\w+\s*\(/,
@@ -85,8 +85,8 @@ const PATTERNS: Record<string, LanguagePattern> = {
       /\blet\s+\w+/,
       /\bvar\s+\w+/,
       /=>\s*\{/,
-      /\$\{.*\}/,
-    ],
+      /\$\{.*\}/
+    ]
   },
   go: {
     signatures: [
@@ -95,7 +95,7 @@ const PATTERNS: Record<string, LanguagePattern> = {
       /\bfmt\.(Print|Sprintf|Errorf)\b/,
       /\bgo\s+func\b/,
       /\bdefer\s+\w+/,
-      /\bvar\s+\w+\s+\w+\s*=\s*/,
+      /\bvar\s+\w+\s+\w+\s*=\s*/
     ],
     hints: [
       /:=/,
@@ -103,8 +103,8 @@ const PATTERNS: Record<string, LanguagePattern> = {
       /\bif\s+err\s*!=\s*nil\b/,
       /\bimport\s+\(\s*$/m,
       /\bstring\b|\bint\b|\bbool\b|\bfloat64\b|\berror\b/,
-      /\*?\w+Error\b/,
-    ],
+      /\*?\w+Error\b/
+    ]
   },
   rust: {
     signatures: [
@@ -113,7 +113,7 @@ const PATTERNS: Record<string, LanguagePattern> = {
       /\bimpl\s+\w+/,
       /::\w+/,
       /\bprintln!\(/,
-      /\buse\s+\w+::/,
+      /\buse\s+\w+::/
     ],
     hints: [
       /\bpub\s+(fn|struct|enum)\b/,
@@ -121,8 +121,8 @@ const PATTERNS: Record<string, LanguagePattern> = {
       /\bmatch\s+\w+\s*\{/,
       /\bstruct\s+\w+\s*\{/,
       /\b&self\b|\b&mut\s+self\b/,
-      /\b\w+!\(/,
-    ],
+      /\b\w+!\(/
+    ]
   },
   ruby: {
     signatures: [
@@ -130,16 +130,9 @@ const PATTERNS: Record<string, LanguagePattern> = {
       /\brequire\s+['"]\w+['"]/,
       /\battr_accessor\b|\battr_reader\b|\battr_writer\b/,
       /\bclass\s+\w+\s*<\s*\w+/,
-      /do\s+\|.*\|/,
+      /do\s+\|.*\|/
     ],
-    hints: [
-      /\bend\s*$/m,
-      /\bputs\b/,
-      /#\{.*\}/,
-      /\bmodule\s+\w+/,
-      /\bnil\b/,
-      /\.each\s+do\b/,
-    ],
+    hints: [/\bend\s*$/m, /\bputs\b/, /#\{.*\}/, /\bmodule\s+\w+/, /\bnil\b/, /\.each\s+do\b/]
   },
   cpp: {
     signatures: [
@@ -148,7 +141,7 @@ const PATTERNS: Record<string, LanguagePattern> = {
       /\bcout\s*<</,
       /\bcin\s*>>/,
       /\bvector\s*</,
-      /\bnamespace\s+\w+/,
+      /\bnamespace\s+\w+/
     ],
     hints: [
       /\bint\s+main\b/,
@@ -156,8 +149,8 @@ const PATTERNS: Record<string, LanguagePattern> = {
       /->\w+/,
       /::\w+/,
       /\bvirtual\b|\boverride\b/,
-      /\btemplate\s*</,
-    ],
+      /\btemplate\s*</
+    ]
   },
   c: {
     signatures: [
@@ -166,14 +159,9 @@ const PATTERNS: Record<string, LanguagePattern> = {
       /\bscanf\(/,
       /\bmalloc\(|\bcalloc\(|\bfree\(/,
       /\bsizeof\(/,
-      /\btypedef\s+struct\b/,
+      /\btypedef\s+struct\b/
     ],
-    hints: [
-      /\bint\s+main\b/,
-      /%d\b|%s\b|%f\b|\n/,
-      /\bNULL\b/,
-      /\b(void)\b/,
-    ],
+    hints: [/\bint\s+main\b/, /%d\b|%s\b|%f\b|\n/, /\bNULL\b/, /\b(void)\b/]
   },
   css: {
     signatures: [
@@ -181,14 +169,14 @@ const PATTERNS: Record<string, LanguagePattern> = {
       /:\s*\d+px\b/,
       /\bcolor\s*:\s*[#\w]/,
       /\bdisplay\s*:\s*(flex|grid|block|none|inline)\b/,
-      /\b@media\b/,
+      /\b@media\b/
     ],
     hints: [
       /\bfont-size\b|\bfont-weight\b|\bmargin\b|\bpadding\b|\bborder\b|\bbackground\b/,
       /!important/,
       /@import/,
-      /\brem\b|\bem\b|\bvh\b|\bvw\b/,
-    ],
+      /\brem\b|\bem\b|\bvh\b|\bvw\b/
+    ]
   },
   html: {
     signatures: [
@@ -196,14 +184,14 @@ const PATTERNS: Record<string, LanguagePattern> = {
       /<\/?\w+[^>]*>/,
       /<html\b/i,
       /<head\b|<body\b/i,
-      /<script\b|<style\b/i,
+      /<script\b|<style\b/i
     ],
     hints: [
       /<div\b|<span\b|<p\b|<a\s|<img\b|<input\b|<button\b/i,
       /class\s*=\s*"/,
       /id\s*=\s*"/,
-      /href\s*=\s*"/,
-    ],
+      /href\s*=\s*"/
+    ]
   },
   sql: {
     signatures: [
@@ -212,28 +200,22 @@ const PATTERNS: Record<string, LanguagePattern> = {
       /\bCREATE\s+TABLE\b/i,
       /\bALTER\s+TABLE\b/i,
       /\bDROP\s+TABLE\b/i,
-      /\bJOIN\b.+\bON\b/is,
+      /\bJOIN\b.+\bON\b/is
     ],
     hints: [
       /\bWHERE\b|\bGROUP\s+BY\b|\bORDER\s+BY\b|\bHAVING\b/i,
       /\bPRIMARY\s+KEY\b|\bFOREIGN\s+KEY\b/i,
-      /\bVARCHAR\b|\bINTEGER\b|\bBOOLEAN\b|\bTIMESTAMP\b/i,
-    ],
+      /\bVARCHAR\b|\bINTEGER\b|\bBOOLEAN\b|\bTIMESTAMP\b/i
+    ]
   },
   shell: {
     signatures: [
       /^#!\/bin\/(ba)?sh\b/m,
       /^#!\/usr\/bin\/env\s+\w+/m,
       /\bexport\s+\w+=/,
-      /\$\{?\w+\}?/,
+      /\$\{?\w+\}?/
     ],
-    hints: [
-      /\becho\b/,
-      /\bif\s+\[\s+/,
-      /\bthen\b|\bfi\b/,
-      /\bdone\b/,
-      /\b\w+=\$\(/,
-    ],
+    hints: [/\becho\b/, /\bif\s+\[\s+/, /\bthen\b|\bfi\b/, /\bdone\b/, /\b\w+=\$\(/]
   },
   swift: {
     signatures: [
@@ -241,15 +223,15 @@ const PATTERNS: Record<string, LanguagePattern> = {
       /\bfunc\s+\w+\s*\([^)]*\)\s*->\s*\w+/,
       /\bvar\s+\w+\s*:\s*\w+/,
       /\blet\s+\w+\s*:\s*\w+/,
-      /\bguard\s+\w+/,
+      /\bguard\s+\w+/
     ],
     hints: [
       /@IBAction\b|@IBOutlet\b/,
       /\boverride\s+func\b/,
       /\bclass\s+\w+\s*:\s*\w+/,
       /\bstruct\s+\w+\s*\{/,
-      /\?\?\s*\w+/,
-    ],
+      /\?\?\s*\w+/
+    ]
   },
   kotlin: {
     signatures: [
@@ -257,31 +239,25 @@ const PATTERNS: Record<string, LanguagePattern> = {
       /\bval\s+\w+\s*[:=]/,
       /\bimport\s+kotlin\./,
       /\bdata\s+class\b/,
-      /\bwhen\s*\(/,
+      /\bwhen\s*\(/
     ],
     hints: [
       /\bvar\s+\w+\s*[:=]/,
       /\?\?/,
       /\b!!\b|\?\s*\./,
       /\bcompanion\s+object\b/,
-      /\bsealed\s+class\b/,
-    ],
+      /\bsealed\s+class\b/
+    ]
   },
   php: {
-    signatures: [
-      /<\?php/,
-      /\$\w+/,
-      /\becho\s+/,
-      /\bfunction\s+\w+\s*\(/,
-      /\b\w+::\w+/,
-    ],
+    signatures: [/<\?php/, /\$\w+/, /\becho\s+/, /\bfunction\s+\w+\s*\(/, /\b\w+::\w+/],
     hints: [
       /\brequire\b|\brequire_once\b|\binclude\b|\binclude_once\b/,
       /\bnamespace\s+\w+/,
       /\buse\s+\w+\\\w+/,
       /\bpublic\s+function\b/,
-      /\bprotected\s+\$/,
-    ],
+      /\bprotected\s+\$/
+    ]
   },
   csharp: {
     signatures: [
@@ -289,16 +265,16 @@ const PATTERNS: Record<string, LanguagePattern> = {
       /\bnamespace\s+\w+/,
       /\bclass\s+\w+\s*:\s*\w+/,
       /\bvar\s+\w+\s*=\s*new\b/,
-      /\bstring\?\b/,
+      /\bstring\?\b/
     ],
     hints: [
       /\bpublic\s+class\b/,
       /\bprivate\s+void\b|\bpublic\s+void\b|\bprotected\s+void\b/,
       /\bConsole\.(Write|Read)/,
       /\bget\s*\{\s*set\s*;\s*\}/,
-      /\basync\s+Task\b/,
-    ],
-  },
+      /\basync\s+Task\b/
+    ]
+  }
 }
 
 /** 最低置信度阈值：最高分至少需要达到 */
@@ -350,7 +326,7 @@ export function detectLanguage(code: string): DetectionResult {
   return {
     language: best[0],
     score: best[1],
-    confident,
+    confident
   }
 }
 

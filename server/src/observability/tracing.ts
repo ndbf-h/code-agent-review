@@ -1,5 +1,8 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { randomUUID } from 'node:crypto'
+import { createLogger } from '../logger'
+
+const logger = createLogger('tracing')
 
 /**
  * 全链路追踪（task → reviewer → LLM generation），经 Langfuse 官方 HTTP Ingestion API 直写。
@@ -45,7 +48,9 @@ class LangfuseIngestClient {
     flusher.unref?.()
   }
 
-  push(event: Omit<IngestionEvent, 'id' | 'timestamp'> & { id?: string; timestamp?: string }): void {
+  push(
+    event: Omit<IngestionEvent, 'id' | 'timestamp'> & { id?: string; timestamp?: string }
+  ): void {
     if (this.stopping) return
     this.queue.push({
       id: event.id || randomUUID(),
@@ -65,26 +70,39 @@ class LangfuseIngestClient {
       headers: { 'Content-Type': 'application/json', Authorization: `Basic ${auth}` },
       // v3 ingestion 契约：{batch: [event...]}
       body: JSON.stringify({ batch })
-    }).then(async response => {
-      if (!response.ok) {
-        console.warn(`[tracing] ingestion ${response.status}: ${(await response.text()).slice(0, 200)}`)
-        return
-      }
-      // v3 批量接口整体 200/207 时也可能有单条失败，需检查 errors 数组
-      try {
-        const result = JSON.parse(await response.text()) as { successes?: unknown[]; errors?: Array<{ id: string; message: string }> }
-        const ok = result.successes?.length ?? 0
-        if (result.errors && result.errors.length > 0) {
-          console.warn(`[tracing] ingestion 批次 ${batch.length} 条：成功 ${ok}，被拒 ${result.errors.length}:`, JSON.stringify(result.errors).slice(0, 300))
-        } else {
-          console.log(`[tracing] ingestion 批次 ${batch.length} 条全部成功`)
-        }
-      } catch {
-        // 非 JSON 响应忽略
-      }
-    }).catch(error => {
-      console.warn('[tracing] ingestion 网络失败:', error instanceof Error ? error.message : error)
     })
+      .then(async response => {
+        if (!response.ok) {
+          logger.warn('ingestion 请求被拒', {
+            status: response.status,
+            body: (await response.text()).slice(0, 200)
+          })
+          return
+        }
+        // v3 批量接口整体 200/207 时也可能有单条失败，需检查 errors 数组
+        try {
+          const result = JSON.parse(await response.text()) as {
+            successes?: unknown[]
+            errors?: Array<{ id: string; message: string }>
+          }
+          const ok = result.successes?.length ?? 0
+          if (result.errors && result.errors.length > 0) {
+            logger.warn('ingestion 批次部分被拒', {
+              batch: batch.length,
+              ok,
+              rejected: result.errors.length,
+              errors: JSON.stringify(result.errors).slice(0, 300)
+            })
+          } else {
+            logger.debug('ingestion 批次全部成功', { batch: batch.length })
+          }
+        } catch {
+          // 非 JSON 响应忽略
+        }
+      })
+      .catch(error => {
+        logger.warn('ingestion 网络失败', { error })
+      })
   }
 
   async shutdown(): Promise<void> {
@@ -99,16 +117,24 @@ class LangfuseIngestClient {
 let ingestClient: LangfuseIngestClient | null = null
 
 /** 启动时调用：配置了密钥则启用上报，否则纯内存模式 */
-export function initTracing(options?: { publicKey?: string; secretKey?: string; baseUrl?: string }): void {
+export function initTracing(options?: {
+  publicKey?: string
+  secretKey?: string
+  baseUrl?: string
+}): void {
   const publicKey = options?.publicKey || process.env.LANGFUSE_PUBLIC_KEY
   const secretKey = options?.secretKey || process.env.LANGFUSE_SECRET_KEY
   if (!publicKey || !secretKey) {
-    console.log('[tracing] Langfuse 未配置密钥，运行在纯计数模式（指标落库不受影响）')
+    logger.info('Langfuse 未配置密钥，运行在纯计数模式（指标落库不受影响）')
     return
   }
-  const baseUrl = (options?.baseUrl || process.env.LANGFUSE_BASE_URL || 'http://localhost:3000').replace(/\/$/, '')
+  const baseUrl = (
+    options?.baseUrl ||
+    process.env.LANGFUSE_BASE_URL ||
+    'http://localhost:3000'
+  ).replace(/\/$/, '')
   ingestClient = new LangfuseIngestClient(publicKey, secretKey, baseUrl)
-  console.log(`[tracing] Langfuse 已启用（ingestion 直写 ${baseUrl}）`)
+  logger.info('Langfuse 已启用', { baseUrl })
 }
 
 export async function shutdownTracing(): Promise<void> {
@@ -188,7 +214,11 @@ export async function withReviewerSpan<T>(role: string, fn: () => Promise<T>): P
  * LLM 调用记账：llm-client 解析出 usage 时调用。
  * 计数始终累加（供 task_metrics）；启用上报时同时发 generation 事件。
  */
-export function recordLlmUsage(usage: { model: string; promptTokens: number; completionTokens: number }): void {
+export function recordLlmUsage(usage: {
+  model: string
+  promptTokens: number
+  completionTokens: number
+}): void {
   const context = storage.getStore()
   if (!context) return
   context.usage.promptTokens += usage.promptTokens
@@ -210,7 +240,11 @@ export function recordLlmUsage(usage: { model: string; promptTokens: number; com
         total: usage.promptTokens + usage.completionTokens,
         unit: 'TOKENS'
       },
-      metadata: { reviewer: context.reviewerSpan ? context.reviewerSpan.spanId.split('-').pop() : 'orchestrator' }
+      metadata: {
+        reviewer: context.reviewerSpan
+          ? context.reviewerSpan.spanId.split('-').pop()
+          : 'orchestrator'
+      }
     }
   })
 }

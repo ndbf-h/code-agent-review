@@ -21,11 +21,18 @@ interface FixResult {
 const applyFixes: Tool = {
   definition: {
     name: 'applyFixes',
-    description: '根据审查发现的问题（issues）自动修复代码，返回修复后的完整代码和修改摘要。只修复报告中指出的问题，不重构、不添加新功能',
+    description:
+      '根据审查发现的问题（issues）自动修复代码，返回修复后的完整代码和修改摘要。只修复报告中指出的问题，不重构、不添加新功能',
     parameters: {
       code: { type: 'string', description: '待修复的原始代码' },
-      issues: { type: 'string', description: '审查发现的 issues JSON 数组，每项含 line/severity/category/message/suggestion' },
-      language: { type: 'string', description: '编程语言（javascript/typescript/python/go/java 等）' }
+      issues: {
+        type: 'string',
+        description: '审查发现的 issues JSON 数组，每项含 line/severity/category/message/suggestion'
+      },
+      language: {
+        type: 'string',
+        description: '编程语言（javascript/typescript/python/go/java 等）'
+      }
     }
   },
   async execute(input: Record<string, unknown>): Promise<string> {
@@ -56,7 +63,7 @@ const applyFixes: Tool = {
     }
 
     // 构建 issues 摘要（只传关键字段给 LLM，控制 prompt 长度）
-    const issuesSummary = (issues as Record<string, unknown>[]).map((issue) => ({
+    const issuesSummary = (issues as Record<string, unknown>[]).map(issue => ({
       line: issue.line,
       severity: issue.severity,
       category: issue.category,

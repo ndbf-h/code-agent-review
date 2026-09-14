@@ -20,9 +20,12 @@ describe('URL target IP safety', () => {
     expect(isPrivateIp(ip)).toBe(false)
   })
 
-  it.each(['::1', 'fc00::1', 'fe80::1', '::ffff:192.168.1.1', 'ff02::1'])('rejects reserved IPv6 address %s', ip => {
-    expect(isPrivateIp(ip)).toBe(true)
-  })
+  it.each(['::1', 'fc00::1', 'fe80::1', '::ffff:192.168.1.1', 'ff02::1'])(
+    'rejects reserved IPv6 address %s',
+    ip => {
+      expect(isPrivateIp(ip)).toBe(true)
+    }
+  )
 
   it('allows a public IPv6 address', () => {
     expect(isPrivateIp('2001:4860:4860::8888')).toBe(false)

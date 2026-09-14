@@ -15,7 +15,7 @@ export const performanceRules: Rule[] = [
     pattern: /(readFileSync|writeFileSync|existsSync|mkdirSync)\s*\(/gi,
     severity: 'warning',
     category: '同步阻塞',
-    message: (m) => `使用了同步文件操作 ${m[1]}()，可能阻塞事件循环`,
+    message: m => `使用了同步文件操作 ${m[1]}()，可能阻塞事件循环`,
     suggestion: '改用异步版本（如 fs.promises.readFile）或使用流式处理'
   },
   {
@@ -28,7 +28,8 @@ export const performanceRules: Rule[] = [
   },
   {
     name: 'large-array-copy',
-    pattern: /\.slice\s*\(\s*0\s*\)|\.concat\s*\(\s*\[\s*\]\s*\)|\.map\s*\([^)]*\)[\s\n]*\.filter|JSON\.parse\s*\(\s*JSON\.stringify/gi,
+    pattern:
+      /\.slice\s*\(\s*0\s*\)|\.concat\s*\(\s*\[\s*\]\s*\)|\.map\s*\([^)]*\)[\s\n]*\.filter|JSON\.parse\s*\(\s*JSON\.stringify/gi,
     severity: 'suggestion',
     category: '内存拷贝',
     message: '对大型数组进行了浅拷贝或双重遍历',

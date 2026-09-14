@@ -1,4 +1,7 @@
 import amqplib, { type ChannelModel, type Channel, type ConfirmChannel } from 'amqplib'
+import { createLogger } from '../logger'
+
+const logger = createLogger('rabbit')
 
 /**
  * 任务流拓扑：
@@ -124,25 +127,29 @@ export class RabbitSession {
       try {
         const connection = await amqplib.connect(this.url)
         if (this.stopped) {
-          try { await connection.close() } catch { /* 已停止，直接丢弃连接 */ }
+          try {
+            await connection.close()
+          } catch {
+            /* 已停止，直接丢弃连接 */
+          }
           return
         }
         this.connection = connection
         this.confirmChannel = null
         backoff = INITIAL_BACKOFF_MS
-        console.log(`[rabbit:${this.label}] 已连接 ${maskUrl(this.url)}`)
+        logger.info('已连接', { label: this.label, url: maskUrl(this.url) })
 
         const channel = await connection.createChannel()
         await assertTopology(channel, this.retryDelayMs)
         await channel.close()
 
         connection.on('error', (err: Error) => {
-          console.error(`[rabbit:${this.label}] 连接错误: ${err.message}`)
+          logger.error('连接错误', { label: this.label, error: err })
         })
         // close 在 error 之后触发，是唯一的“连接已死”可靠信号
         connection.on('close', () => {
           if (this.stopped) return
-          console.warn(`[rabbit:${this.label}] 连接断开，开始自动重连`)
+          logger.warn('连接断开，开始自动重连', { label: this.label })
           this.connection = null
           this.confirmChannel = null
           void this.connectLoop()
@@ -152,13 +159,16 @@ export class RabbitSession {
           try {
             await callback(connection)
           } catch (err) {
-            console.error(`[rabbit:${this.label}] onReady 回调失败: ${err instanceof Error ? err.message : String(err)}`)
+            logger.error('onReady 回调失败', { label: this.label, error: err })
           }
         }
         return
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        console.warn(`[rabbit:${this.label}] 连接失败（${message}），${Math.round(backoff / 1000)}s 后重试`)
+        logger.warn('连接失败，稍后重试', {
+          label: this.label,
+          retryInSeconds: Math.round(backoff / 1000),
+          error
+        })
         await new Promise(resolve => setTimeout(resolve, backoff))
         backoff = Math.min(backoff * 2, MAX_BACKOFF_MS)
       }

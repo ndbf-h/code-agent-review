@@ -37,9 +37,7 @@ describe('LlmClient', () => {
     // Mock fetch to simulate a network error
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network error'))
 
-    await expect(
-      client.chat([{ role: 'user', content: 'hello' }])
-    ).rejects.toThrow('Network error')
+    await expect(client.chat([{ role: 'user', content: 'hello' }])).rejects.toThrow('Network error')
   })
 
   it('should handle non-OK HTTP responses', async () => {
@@ -49,8 +47,6 @@ describe('LlmClient', () => {
       new Response('Unauthorized', { status: 401, statusText: 'Unauthorized' })
     )
 
-    await expect(
-      client.chat([{ role: 'user', content: 'hello' }])
-    ).rejects.toThrow(/LLM API error/)
+    await expect(client.chat([{ role: 'user', content: 'hello' }])).rejects.toThrow(/LLM API error/)
   })
 })

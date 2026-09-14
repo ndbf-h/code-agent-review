@@ -2,8 +2,15 @@ import { getGuidelineDocuments, type GuidelineDocument } from './knowledge-base'
 import type { RetrievedGuideline } from './retriever'
 import { buildBm25Index } from './bm25'
 import {
-  EmbeddingClient, cosineSimilarity, getEmbeddingConfig, getRerankConfig, rerankDocuments
+  EmbeddingClient,
+  cosineSimilarity,
+  getEmbeddingConfig,
+  getRerankConfig,
+  rerankDocuments
 } from './providers'
+import { createLogger } from '../../logger'
+
+const logger = createLogger('rag:hybrid')
 
 /**
  * 混合检索管线：BM25（CJK 感知分词）+ 向量召回（多语言嵌入，可选）→ RRF 融合 → 重排（可选）。
@@ -53,9 +60,12 @@ export async function retrieveGuidelinesHybrid(input: {
   const dimension = input.dimension
   const topK = Math.min(Math.max(input.topK || 4, 1), 8)
 
-  const documents = getGuidelineDocuments(input.scopeId).filter(doc =>
-    (!dimension || !doc.dimension || doc.dimension === dimension) &&
-    (!doc.languages.length || doc.languages.includes(language) || doc.languages.includes('javascript'))
+  const documents = getGuidelineDocuments(input.scopeId).filter(
+    doc =>
+      (!dimension || !doc.dimension || doc.dimension === dimension) &&
+      (!doc.languages.length ||
+        doc.languages.includes(language) ||
+        doc.languages.includes('javascript'))
   )
   if (documents.length === 0) return []
 
@@ -76,7 +86,7 @@ export async function retrieveGuidelinesHybrid(input: {
         documents.map((doc, i) => [doc.id, cosineSimilarity(queryVector[0], docVectors[i])])
       )
     } catch (error) {
-      console.warn('[rag:hybrid] 向量分支不可用，降级为 BM25 单分支:', error instanceof Error ? error.message : error)
+      logger.warn('向量分支不可用，降级为 BM25 单分支', { error })
     }
   }
 
@@ -85,10 +95,16 @@ export async function retrieveGuidelinesHybrid(input: {
   if (candidates.length === 0) return []
 
   // ── RRF 融合 ──
-  const byBm25 = [...candidates].sort((a, b) => (bm25Scores.get(b.id) || 0) - (bm25Scores.get(a.id) || 0)).map(d => d.id)
+  const byBm25 = [...candidates]
+    .sort((a, b) => (bm25Scores.get(b.id) || 0) - (bm25Scores.get(a.id) || 0))
+    .map(d => d.id)
   const rankLists: string[][] = [byBm25]
   if (cosineScores) {
-    rankLists.push([...candidates].sort((a, b) => (cosineScores!.get(b.id) || 0) - (cosineScores!.get(a.id) || 0)).map(d => d.id))
+    rankLists.push(
+      [...candidates]
+        .sort((a, b) => (cosineScores!.get(b.id) || 0) - (cosineScores!.get(a.id) || 0))
+        .map(d => d.id)
+    )
   }
   const fused = rrfFuse(rankLists)
   const fusedRanking = [...candidates]
@@ -101,7 +117,9 @@ export async function retrieveGuidelinesHybrid(input: {
   const rerankConfig = getRerankConfig()
   if (rerankConfig && fusedRanking.length > 1) {
     try {
-      const docById = new Map<string, GuidelineDocument>(documents.map(d => [d.id, d] as [string, GuidelineDocument]))
+      const docById = new Map<string, GuidelineDocument>(
+        documents.map(d => [d.id, d] as [string, GuidelineDocument])
+      )
       const texts = fusedRanking.map(id => docById.get(id)!.content)
       const scores = await rerankDocuments(query, texts, rerankConfig)
       finalRanking = fusedRanking
@@ -109,7 +127,7 @@ export async function retrieveGuidelinesHybrid(input: {
         .sort((a, b) => b.score - a.score)
         .map(item => item.id)
     } catch (error) {
-      console.warn('[rag:hybrid] 重排不可用，保留 RRF 序:', error instanceof Error ? error.message : error)
+      logger.warn('重排不可用，保留 RRF 序', { error })
     }
   }
 

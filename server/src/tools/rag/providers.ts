@@ -54,9 +54,13 @@ export class EmbeddingClient {
         body: JSON.stringify({ model: this.config.model, input: missing })
       })
       if (!response.ok) {
-        throw new Error(`Embedding API ${response.status}: ${(await response.text()).slice(0, 200)}`)
+        throw new Error(
+          `Embedding API ${response.status}: ${(await response.text()).slice(0, 200)}`
+        )
       }
-      const data = await response.json() as { data: Array<{ index: number; embedding: number[] }> }
+      const data = (await response.json()) as {
+        data: Array<{ index: number; embedding: number[] }>
+      }
       for (const item of data.data) {
         this.cache.set(missing[item.index], item.embedding)
       }
@@ -80,7 +84,11 @@ export function cosineSimilarity(a: number[], b: number[]): number {
 }
 
 /** 重排：返回与 documents 下标对应的 relevance 分数（服务不可用时抛错，由调用方降级） */
-export async function rerankDocuments(query: string, documents: string[], config: RerankConfig): Promise<number[]> {
+export async function rerankDocuments(
+  query: string,
+  documents: string[],
+  config: RerankConfig
+): Promise<number[]> {
   const response = await fetch(`${config.baseUrl}/rerank`, {
     method: 'POST',
     headers: {
@@ -92,7 +100,9 @@ export async function rerankDocuments(query: string, documents: string[], config
   if (!response.ok) {
     throw new Error(`Rerank API ${response.status}: ${(await response.text()).slice(0, 200)}`)
   }
-  const data = await response.json() as { results: Array<{ index: number; relevance_score: number }> }
+  const data = (await response.json()) as {
+    results: Array<{ index: number; relevance_score: number }>
+  }
   const scores = new Array<number>(documents.length).fill(0)
   for (const item of data.results) {
     if (item.index >= 0 && item.index < documents.length) scores[item.index] = item.relevance_score

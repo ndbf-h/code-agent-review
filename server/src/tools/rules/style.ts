@@ -4,10 +4,10 @@ import type { Rule } from './types'
 export const styleRules: Rule[] = [
   {
     name: 'magic-number',
-    pattern: /(?<![a-zA-Z0-9_"'.\[\]])(\d{2,})(?![a-zA-Z0-9_"\[\]])/g,
+    pattern: /(?<![a-zA-Z0-9_"'.[\]])(\d{2,})(?![a-zA-Z0-9_"[\]])/g,
     severity: 'suggestion',
     category: '魔法数字',
-    message: (m) => `发现魔法数字 ${m[1]}，缺少语义说明`,
+    message: m => `发现魔法数字 ${m[1]}，缺少语义说明`,
     suggestion: '将数字提取为命名常量，如 const MAX_RETRIES = 3'
   },
   {
@@ -24,7 +24,7 @@ export const styleRules: Rule[] = [
     pattern: /^export\s+(async\s+)?function\s+(\w+)[^{]*\{$/gm,
     severity: 'suggestion',
     category: '缺少注释',
-    message: (m) => `导出函数 "${m[2]}" 缺少 JSDoc 注释`,
+    message: m => `导出函数 "${m[2]}" 缺少 JSDoc 注释`,
     suggestion: '为导出函数添加 JSDoc 注释，说明参数、返回值和用途'
   },
   {

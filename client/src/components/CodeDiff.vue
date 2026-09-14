@@ -52,10 +52,7 @@ function getHighlightedLines(code: string): string[] {
 }
 
 function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
 function updateHighlighting() {
@@ -157,12 +154,8 @@ function severityTagType(change: Change): string {
         <el-tag size="small" type="info">{{ language }}</el-tag>
         <span class="toolbar-title">代码对比</span>
         <div class="toolbar-actions">
-          <el-button size="small" text @click="copyFixedCode">
-            复制修复代码
-          </el-button>
-          <el-button size="small" text @click="downloadFixedCode">
-            下载修复文件
-          </el-button>
+          <el-button size="small" text @click="copyFixedCode"> 复制修复代码 </el-button>
+          <el-button size="small" text @click="downloadFixedCode"> 下载修复文件 </el-button>
         </div>
       </div>
 
@@ -181,16 +174,10 @@ function severityTagType(change: Change): string {
               class="code-row"
               :class="{ 'row-changed': isOriginalChanged(idx + 1) }"
             >
-              <span
-                class="line-num"
-                :class="{ 'num-changed': isOriginalChanged(idx + 1) }"
-              >
+              <span class="line-num" :class="{ 'num-changed': isOriginalChanged(idx + 1) }">
                 {{ idx + 1 }}
               </span>
-              <span
-                class="line-content"
-                v-html="highlightedOriginal[idx] || '&nbsp;'"
-              ></span>
+              <span class="line-content" v-html="highlightedOriginal[idx] || '&nbsp;'"></span>
             </div>
           </div>
         </div>
@@ -208,16 +195,10 @@ function severityTagType(change: Change): string {
               class="code-row"
               :class="{ 'row-changed': isFixedChanged(idx + 1) }"
             >
-              <span
-                class="line-num"
-                :class="{ 'num-fixed': isFixedChanged(idx + 1) }"
-              >
+              <span class="line-num" :class="{ 'num-fixed': isFixedChanged(idx + 1) }">
                 {{ idx + 1 }}
               </span>
-              <span
-                class="line-content"
-                v-html="highlightedFixed[idx] || '&nbsp;'"
-              ></span>
+              <span class="line-content" v-html="highlightedFixed[idx] || '&nbsp;'"></span>
             </div>
           </div>
         </div>
@@ -227,18 +208,10 @@ function severityTagType(change: Change): string {
       <div class="changes-section">
         <div class="section-title">修改清单（{{ changes.length }} 处）</div>
         <el-collapse>
-          <el-collapse-item
-            v-for="(change, idx) in changes"
-            :key="idx"
-            :name="idx"
-          >
+          <el-collapse-item v-for="(change, idx) in changes" :key="idx" :name="idx">
             <template #title>
               <div class="change-title">
-                <el-tag
-                  size="small"
-                  :type="severityTagType(change)"
-                  effect="plain"
-                >
+                <el-tag size="small" :type="severityTagType(change)" effect="plain">
                   L{{ change.line }}
                 </el-tag>
                 <span class="change-desc">{{ change.description }}</span>

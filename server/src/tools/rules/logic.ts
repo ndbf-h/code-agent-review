@@ -7,7 +7,7 @@ export const logicRules: Rule[] = [
     pattern: /(\w+)\.(\w+)\s*\(/g,
     severity: 'warning',
     category: '空值安全',
-    message: (m) => `调用 "${m[1]}.${m[2]}()" 前未对 "${m[1]}" 做空值检查`,
+    message: m => `调用 "${m[1]}.${m[2]}()" 前未对 "${m[1]}" 做空值检查`,
     suggestion: '在访问属性/方法前添加 if (x != null) 检查或使用可选链 x?.method()'
   },
   {
@@ -39,7 +39,8 @@ export const logicRules: Rule[] = [
     pattern: /(\w+)\[(?!['"])(\w+)\]/g,
     severity: 'suggestion',
     category: '索引安全',
-    message: (m) => `数组 "${m[1]}[${m[2]}]" 访问未做边界检查`,
-    suggestion: '访问前检查 index >= 0 && index < arr.length，或使用 arr.at(index)（返回 undefined）'
+    message: m => `数组 "${m[1]}[${m[2]}]" 访问未做边界检查`,
+    suggestion:
+      '访问前检查 index >= 0 && index < arr.length，或使用 arr.at(index)（返回 undefined）'
   }
 ]

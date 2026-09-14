@@ -26,19 +26,29 @@ describe('RAG guideline retriever', () => {
   })
 
   it('only returns custom guidance inside its scope', () => {
-    registerCustomGuidelines([{
-      id: 'project-only-rule',
-      title: 'Project rule',
-      dimension: 'security',
-      languages: ['typescript'],
-      keywords: ['project-only-rule'],
-      content: 'Project-only security rule',
-      source: 'project-rules.md',
-      scopeId: 'scope-a'
-    }])
+    registerCustomGuidelines([
+      {
+        id: 'project-only-rule',
+        title: 'Project rule',
+        dimension: 'security',
+        languages: ['typescript'],
+        keywords: ['project-only-rule'],
+        content: 'Project-only security rule',
+        source: 'project-rules.md',
+        scopeId: 'scope-a'
+      }
+    ])
 
-    const inScope = retrieveGuidelines({ code: 'project-only-rule', language: 'typescript', scopeId: 'scope-a' })
-    const outOfScope = retrieveGuidelines({ code: 'project-only-rule', language: 'typescript', scopeId: 'scope-b' })
+    const inScope = retrieveGuidelines({
+      code: 'project-only-rule',
+      language: 'typescript',
+      scopeId: 'scope-a'
+    })
+    const outOfScope = retrieveGuidelines({
+      code: 'project-only-rule',
+      language: 'typescript',
+      scopeId: 'scope-b'
+    })
 
     expect(inScope.some(result => result.id === 'project-only-rule')).toBe(true)
     expect(outOfScope.some(result => result.id === 'project-only-rule')).toBe(false)

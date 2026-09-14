@@ -4,6 +4,9 @@ import { decomposeTask, assignAgent, collectResults, generateReport } from './or
 import { analyzeCode, checkPattern, checkComplexity, validateSyntax } from './review'
 import { applyFixes } from './fix'
 import { retrieveCodingGuidelines } from './rag'
+import { createLogger } from '../logger'
+
+const logger = createLogger('tools')
 
 // 新增 readFile 工具
 const readFile: Tool = {
@@ -41,7 +44,7 @@ function registerAllTools(): void {
   toolRegistry.register(applyFixes)
   toolRegistry.register(retrieveCodingGuidelines)
 
-  console.log(`[tools] Registered ${toolRegistry.getDefinitions().length} tools`)
+  logger.info('工具注册完成', { count: toolRegistry.getDefinitions().length })
 }
 
 export { registerAllTools }

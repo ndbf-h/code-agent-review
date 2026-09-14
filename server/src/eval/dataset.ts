@@ -15,7 +15,12 @@ export function parseJsonl<T>(content: string, validate: (row: unknown, lineNo: 
     try {
       parsed = JSON.parse(line)
     } catch (error) {
-      throw new Error(`数据集第 ${i + 1} 行 JSON 解析失败: ${error instanceof Error ? error.message : error}`)
+      throw new Error(
+        `数据集第 ${i + 1} 行 JSON 解析失败: ${error instanceof Error ? error.message : error}`,
+        {
+          cause: error
+        }
+      )
     }
     rows.push(validate(parsed, i + 1))
   }
@@ -69,11 +74,22 @@ export function validateReviewSample(row: unknown, lineNo: number) {
     language: requireString(record, 'language', lineNo),
     title: typeof record.title === 'string' ? record.title : undefined,
     code: requireString(record, 'code', lineNo),
-    expectedIssues: expected as Array<{ dimension: 'security' | 'performance' | 'style' | 'logic'; category?: string; keyword?: string; note?: string }>
+    expectedIssues: expected as Array<{
+      dimension: 'security' | 'performance' | 'style' | 'logic'
+      category?: string
+      keyword?: string
+      note?: string
+    }>
   }
 }
 
-const RAG_QUERY_TYPES = ['exact-english', 'paraphrase-english', 'chinese-only', 'code-snippet', 'dimension-filtered']
+const RAG_QUERY_TYPES = [
+  'exact-english',
+  'paraphrase-english',
+  'chinese-only',
+  'code-snippet',
+  'dimension-filtered'
+]
 
 export function validateRagQuery(row: unknown, lineNo: number) {
   const record = asRecord(row, lineNo)
@@ -82,12 +98,21 @@ export function validateRagQuery(row: unknown, lineNo: number) {
     throw new Error(`数据集第 ${lineNo} 行 RAG 查询 type 非法: ${type}`)
   }
   const expected = record.expectedDocIds
-  if (!Array.isArray(expected) || expected.length === 0 || !expected.every(id => typeof id === 'string')) {
+  if (
+    !Array.isArray(expected) ||
+    expected.length === 0 ||
+    !expected.every(id => typeof id === 'string')
+  ) {
     throw new Error(`数据集第 ${lineNo} 行 expectedDocIds 必须为非空字符串数组`)
   }
   return {
     id: requireString(record, 'id', lineNo),
-    type: type as 'exact-english' | 'paraphrase-english' | 'chinese-only' | 'code-snippet' | 'dimension-filtered',
+    type: type as
+      | 'exact-english'
+      | 'paraphrase-english'
+      | 'chinese-only'
+      | 'code-snippet'
+      | 'dimension-filtered',
     query: requireString(record, 'query', lineNo),
     language: typeof record.language === 'string' ? record.language : undefined,
     dimension: typeof record.dimension === 'string' ? record.dimension : undefined,

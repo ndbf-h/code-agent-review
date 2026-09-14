@@ -1,6 +1,10 @@
 import { Client } from 'pg'
+import { getConfig } from '../config'
 import { insertTaskEvent, getTaskEventBySeq, type TaskEventRow } from '../db/queries'
 import type { ReviewEvent } from '../agent/orchestrator'
+import { createLogger } from '../logger'
+
+const logger = createLogger('event-subscriber')
 
 /** 带库内自增序号的事件：seq 用于 SSE 断线续传（Last-Event-Id / ?after=）与客户端去重 */
 export interface StoredTaskEvent extends ReviewEvent {
@@ -73,13 +77,13 @@ async function listenLoop(dsn: string): Promise<void> {
       }
     })
     client.on('error', err => {
-      console.error('[event-subscriber] 连接异常:', err.message)
+      logger.error('连接异常', { error: err })
       scheduleReconnect(dsn)
     })
     await client.query('LISTEN task_events')
-    console.log('[event-subscriber] 已订阅 task_events 通知通道')
+    logger.info('已订阅 task_events 通知通道')
   } catch (error) {
-    console.error('[event-subscriber] 连接失败:', error instanceof Error ? error.message : error)
+    logger.error('连接失败', { error })
     scheduleReconnect(dsn)
   }
 }
@@ -101,8 +105,7 @@ function scheduleReconnect(dsn: string): void {
 
 export async function startEventSubscriber(): Promise<void> {
   subscriberStopping = false
-  const dsn = process.env.DATABASE_URL || 'postgres://postgres:123456@localhost:5432/code_review'
-  await listenLoop(dsn)
+  await listenLoop(getConfig().databaseUrl)
 }
 
 export async function stopEventSubscriber(): Promise<void> {
