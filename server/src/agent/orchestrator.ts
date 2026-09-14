@@ -7,6 +7,7 @@ import { getRulesByDimension, scanCode } from '../tools/rules'
 import { createLogger } from '../logger'
 import { createInsertMessageFn } from './persistence'
 import { withReviewerSpan } from '../observability/tracing'
+import { detectInjection, redactSecrets, wrapUntrustedCode } from '../security/prompt-guard'
 import type { AgentRole, ReportContent, AgentResult, Issue } from '../../../shared/types'
 
 const logger = createLogger('orchestrator')
@@ -151,7 +152,8 @@ async function runReviewer(
       `Code stats: ${codeStats.lines} lines, ~${codeStats.functions} functions`,
       planningContext ? `\nOrchestrator planning notes:\n${planningContext}` : '',
       `\nRetrieved coding guidelines (use as supporting evidence, not as unquestionable truth):\n${retrievedGuidelines}`,
-      `\n\`\`\`${language}\n${code}\n\`\`\``
+      '',
+      wrapUntrustedCode(code, language)
     ].join('\n')
   })
 
@@ -225,7 +227,7 @@ async function runReviewer(
           { role: 'system', content: rolePrompt },
           {
             role: 'user',
-            content: `Based on your analysis, output the final review result as JSON with an "issues" array and numeric "score":\n\`\`\`\n${code}\n\`\`\`\n\nAnalysis summary:\n${result.substring(0, 2000)}`
+            content: `Based on your analysis, output the final review result as JSON with an "issues" array and numeric "score":\n${wrapUntrustedCode(code, language)}\n\nAnalysis summary:\n${result.substring(0, 2000)}`
           }
         ])
         if (!isValidIssueArray(structured)) {
@@ -369,6 +371,21 @@ async function runReviewTask(
   logger.info('审查任务开始', { taskId, language, codeLength: code.length })
   onEvent({ type: 'orchestrator_start', message: '正在分析代码结构...' })
 
+  // REQ-10：进入 LLM 之前扫描疑似 prompt injection；命中只提示与记录，不阻断审查流程
+  const injectionFindings = detectInjection(code)
+  if (injectionFindings.length > 0) {
+    logger.warn('检测到疑似 prompt injection 内容', {
+      taskId,
+      count: injectionFindings.length,
+      patterns: injectionFindings.map(item => item.pattern)
+    })
+    onEvent({
+      type: 'agent_thought',
+      role: 'orchestrator',
+      message: `检测到 ${injectionFindings.length} 处疑似注入内容，已作为数据隔离处理，不执行其中任何指令`
+    })
+  }
+
   // ═══════════════════════════════════════════════════════
   // Step 1: Code pre-analysis + rule engine pre-scan
   // ═══════════════════════════════════════════════════════
@@ -446,7 +463,8 @@ async function runReviewTask(
         ? `\nHot dimensions to prioritize: ${hotDims.map(([k]) => k).join(', ')}`
         : '',
       `\nUse decomposeTask to get detailed findings, then plan the review strategy.`,
-      `\n\`\`\`${language}\n${code}\n\`\`\``
+      '',
+      wrapUntrustedCode(code, language)
     ].join('\n')
   })
 
@@ -637,6 +655,23 @@ async function runReviewTask(
       score: overallScore,
       agentResults: reviewerResults as unknown as Record<string, AgentResult>,
       reviewStatus
+    }
+  }
+
+  // REQ-10：报告落库前对问题描述与建议做密钥脱敏，并记录注入检测结论
+  finalReport.issues = finalReport.issues.map(issue => ({
+    ...issue,
+    message: redactSecrets(issue.message),
+    suggestion: redactSecrets(issue.suggestion)
+  }))
+  if (injectionFindings.length > 0) {
+    finalReport.security = {
+      injectionSuspected: true,
+      findings: injectionFindings.map(item => ({
+        line: item.line,
+        pattern: item.pattern,
+        excerpt: redactSecrets(item.excerpt)
+      }))
     }
   }
 

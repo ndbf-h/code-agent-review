@@ -11,10 +11,33 @@ interface Issue {
   suggestion: string
 }
 
+/** 疑似 prompt injection 检测记录（与服务端 shared/types.ts 保持一致） */
+interface ReportInjectionFinding {
+  line: number
+  pattern: string
+  excerpt: string
+}
+
+/** 报告输入安全信息 */
+interface ReportSecurity {
+  injectionSuspected: boolean
+  findings: ReportInjectionFinding[]
+}
+
+/** ReAct 治理统计 */
+interface ReportGovernance {
+  loopBreaks: number
+  toolCalls: number
+  budgetExceeded: boolean
+}
+
 interface ReviewReport {
   issues: Issue[]
   score: number
   agentResults: Record<string, { issues: Issue[]; score: number }>
+  reviewStatus?: Record<string, 'success' | 'fallback' | 'failed'>
+  security?: ReportSecurity
+  governance?: ReportGovernance
 }
 
 interface ChatMessage {

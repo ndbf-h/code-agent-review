@@ -27,11 +27,43 @@ interface AgentResult {
   score: number
 }
 
+/** 疑似 prompt injection 的检测记录（REQ-10） */
+interface InjectionFinding {
+  /** 命中行号（从 1 开始） */
+  line: number
+  /** 命中的规则名 */
+  pattern: string
+  /** 命中片段（已截断） */
+  excerpt: string
+}
+
+/** 报告的输入安全信息（REQ-10） */
+interface ReportSecurity {
+  /** 是否检测到疑似注入内容 */
+  injectionSuspected: boolean
+  /** 检测到的疑似片段 */
+  findings: InjectionFinding[]
+}
+
+/** ReAct 治理统计（REQ-11） */
+interface ReportGovernance {
+  /** 被熔断的重复工具调用次数 */
+  loopBreaks: number
+  /** 累计工具调用次数 */
+  toolCalls: number
+  /** 是否因超出 token 预算而提前降级 */
+  budgetExceeded: boolean
+}
+
 interface ReportContent {
   issues: Issue[]
   score: number
   agentResults: Record<string, AgentResult>
   reviewStatus?: Record<string, 'success' | 'fallback' | 'failed'>
+  /** 输入安全信息，仅在检测到疑似注入时写入 */
+  security?: ReportSecurity
+  /** ReAct 治理统计，仅在产生熔断/预算事件时写入 */
+  governance?: ReportGovernance
 }
 
 interface Task {

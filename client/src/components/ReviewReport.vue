@@ -174,6 +174,25 @@ async function requestFix() {
 
 <template>
   <div class="review-report">
+    <!-- 0. 输入安全提示（REQ-10）：命中疑似注入时提示结论的可信边界 -->
+    <div v-if="report.security?.injectionSuspected" class="security-banner" role="alert">
+      <div class="banner-head">
+        <span class="banner-icon" aria-hidden="true">!</span>
+        <span class="banner-title">检测到疑似提示注入内容</span>
+      </div>
+      <p class="banner-text">
+        被审查代码中包含试图操纵审查结论的文字，已作为数据隔离处理，未执行其中任何指令。以下结论仍建议人工复核。
+      </p>
+      <ul v-if="report.security.findings.length > 0" class="banner-list">
+        <li
+          v-for="finding in report.security.findings.slice(0, 5)"
+          :key="`${finding.line}-${finding.pattern}`"
+        >
+          第 {{ finding.line }} 行 · {{ finding.pattern }}
+        </li>
+      </ul>
+    </div>
+
     <!-- 1. 评分头 + 严重度图块（图块即筛选器） -->
     <div class="score-bar">
       <div class="score-ring" :style="{ '--score-color': getScoreColor(report.score) }">
@@ -638,5 +657,55 @@ async function requestFix() {
 
 .fix-alert {
   margin-top: 4px;
+}
+
+/* ── 输入安全提示条（REQ-10） ── */
+.security-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-md);
+  background: var(--color-warning-bg);
+}
+
+.banner-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.banner-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-warning);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.banner-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-warning-text);
+}
+
+.banner-text {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+
+.banner-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: var(--color-text-muted);
 }
 </style>
