@@ -2,6 +2,44 @@
 
 > 每完成一项优化在此登记：做了什么、关键决策、量化结果。配合 `docs/optimization-plan-2026.md` 使用。
 
+## 当前进度索引（2026-09-14 生产级打磨，暂停时的状态）
+
+需求与计划：`docs/superpowers/specs/2026-09-14-production-readiness-prd.md`（17 项需求）、`docs/superpowers/specs/2026-09-14-competitive-analysis.md`、`docs/superpowers/plans/2026-09-14-production-readiness-plan.md`（8 个批次，含进度台账）。
+
+| 批次 | 内容 | 状态 |
+| --- | --- | --- |
+| 1 | REQ-01 ESLint / Prettier / EditorConfig、REQ-02 GitHub Actions CI + Dependabot | 完成，验收通过 |
+| 2 | REQ-03 zod 配置校验、REQ-06 helmet / CORS 白名单 / body 限制、REQ-07 live / ready 探针 | 完成，验收通过 |
+| 3 | REQ-04 路由入参 zod 校验、REQ-05 pino 结构化日志 + 请求 ID + 访问日志 | 完成，验收通过 |
+| 4 | REQ-09 版本化迁移（advisory lock + schema_migrations）、REQ-08 非 root 容器 + nginx 托管前端 | 完成，验收通过 |
+| 5 到 8 | LLM 治理、API Key / 导出 / OpenAPI、请求级配置 / GitHub Webhook、文档收口 | 待开始 |
+
+下次继续：
+1. 从批次 5（REQ-10 提示注入防御、REQ-11 ReAct 治理）开始按计划文件逐批实施，每批次开发完成后由验收角色审查、问题回流修复；
+2. 批次 8 收口时补 README（新能力、配置项、探针、CI 徽章）、SECURITY.md、CONTRIBUTING.md、CHANGELOG.md，并在本文件登记量化结果。
+
+## 2026-09-14 · 生产级打磨批次 1 到 4
+
+**做了什么**
+- 工程化：根目录 ESLint flat config（typescript-eslint + eslint-plugin-vue + prettier 兼容）、Prettier、EditorConfig、`.gitattributes` 统一 LF；现有 lint error 清零；GitHub Actions CI（server / client / 格式检查 / Docker 构建四个 job）与 Dependabot。
+- 配置：`config.ts` 改为 zod schema 一次性校验并列出全部出错字段；`DATABASE_URL` / `RABBITMQ_URL` 必填，移除明文口令回退；`getConfig()` 单例收编各处 `process.env` 直读；新增 `NODE_ENV`、`LOG_FORMAT`、`CORS_ORIGINS`、`TRUST_PROXY`、`MAX_BODY_SIZE`、`MAX_CODE_CHARS` 等变量并写入 `.env.example`。
+- HTTP 加固：`app.ts` 的 `createApp(deps)` 工厂集中装配 helmet、CORS 白名单、trust proxy、body 大小限制（413 / 400 统一错误码）、全局限流、请求 ID、访问日志与全局错误处理；SSE 处理器不再硬编码 `Access-Control-Allow-Origin: *`。
+- 探针：`/api/health/live`（仅进程存活）、`/api/health/ready`（并行探 PG 与 RabbitMQ、可配超时、503 降级）、`/api/health?deep=1` 才探 LLM；compose healthcheck 改指 ready。
+- 入参校验：`validation/schemas.ts` + `validate` 中间件覆盖 tasks 路由全部 10 个接口，`:id` 必须为 UUID，错误响应 `{ error, code: 'VALIDATION_ERROR', details[] }`；`/fix`、`/fetch-url` 的全部错误响应带 `code`。
+- 日志：`logger.ts` 改 pino（`createLogger(name)` 与四个方法签名不变），JSON / pretty 双模式，`X-Request-Id` 透传或生成并经 AsyncLocalStorage 自动注入每行日志，5xx 响应体带 requestId；服务端裸 console 清零并把 `no-console` 升为 error（`eval/` CLI 与测试放行）。
+- 数据层：`db/migrator.ts` 以会话级 advisory lock 串行化多实例启动，`schema_migrations` 记录已应用版本，每个迁移独立事务、失败回滚不记录；`001_initial_schema` 与原 `schema.ts` 全部语句等价且幂等，`002_task_review_config` 为 REQ-14 预留 `review_config` / `source` JSONB 列。
+- 容器：server 镜像 runtime 阶段 `USER node` + `HEALTHCHECK`；client 改两阶段构建、运行阶段 `nginxinc/nginx-unprivileged:alpine`（8080）+ `nginx.conf`（SPA 回退、gzip、资源缓存、安全头）；worker 禁用镜像自带探针；新增 `.dockerignore`。
+
+**关键决策**
+- 增量改造：不迁移框架、不重写编排核心；所有验收以单测 + mock 完成，不依赖本地 PG / MQ / LLM。
+- `getConfig()` 惰性解析执行全量校验：即使只需 `DATABASE_URL` 也要求 `LLM_API_KEY` 等必填项，保证任何进程形态的配置完整。
+- 子目录 lint 脚本统一为 `cd .. && eslint <dir>/src`，避免 flat config 的 `files` 模式按 cwd 匹配失效。
+
+**验证结果**
+- server：vitest 21 文件 / 161 用例（本轮新增 76 例）；`tsc --noEmit`、`tsc` 构建、`eslint`、`prettier --check` 全部通过。
+- client：`vue-tsc -b`、vitest 7 用例、`vite build` 通过；lint 仅剩 11 条 warning（`vue/attributes-order`、`no-v-html`）。
+- Docker：本机守护进程未运行，Dockerfile / nginx.conf / compose 只做静态检查，镜像构建由 CI 的 docker job 覆盖。
+
 ## 📍 当前进度索引（2026-08-16 会话结束时的状态）
 
 | 项 | 状态 | 关键数字 |
