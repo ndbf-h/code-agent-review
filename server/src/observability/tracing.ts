@@ -211,6 +211,21 @@ export async function withReviewerSpan<T>(role: string, fn: () => Promise<T>): P
 }
 
 /**
+ * 读取当前任务上下文已累计的 token 用量（REQ-11 预算判断的数据源）。
+ * 不在任务上下文内（例如单测直接调用）时返回全 0。
+ */
+export function getCurrentTaskTokenUsage(): {
+  promptTokens: number
+  completionTokens: number
+  total: number
+} {
+  const context = storage.getStore()
+  if (!context) return { promptTokens: 0, completionTokens: 0, total: 0 }
+  const { promptTokens, completionTokens } = context.usage
+  return { promptTokens, completionTokens, total: promptTokens + completionTokens }
+}
+
+/**
  * LLM 调用记账：llm-client 解析出 usage 时调用。
  * 计数始终累加（供 task_metrics）；启用上报时同时发 generation 事件。
  */

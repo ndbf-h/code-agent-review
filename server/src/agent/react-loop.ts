@@ -8,6 +8,33 @@ const logger = createLogger('react-loop')
 const MAX_ROUNDS = 10
 const MIN_ROUNDS = 2
 
+/** ReAct 工具调用治理计数器：同一 reviewer 的重试共享同一份，跨重试累计 */
+export interface ToolCallGuard {
+  /** 相同「工具 + 参数」允许的调用次数，超过即熔断；<=0 关闭熔断 */
+  repeatThreshold: number
+  /** 单个 reviewer 允许的工具调用总次数；<=0 不限制 */
+  maxToolCalls: number
+  /** 已熔断的重复调用次数 */
+  loopBreaks: number
+  /** 累计工具调用次数 */
+  toolCalls: number
+}
+
+/** 稳定序列化：对象键排序，保证「相同参数」判定不受键顺序影响 */
+function stableStringify(value: unknown, depth = 0): string {
+  if (depth > 6) return '"..."'
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null'
+  if (Array.isArray(value)) {
+    return `[${value.map(item => stableStringify(item, depth + 1)).join(',')}]`
+  }
+  const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
+    a < b ? -1 : 1
+  )
+  return `{${entries
+    .map(([key, item]) => `${JSON.stringify(key)}:${stableStringify(item, depth + 1)}`)
+    .join(',')}}`
+}
+
 export type StepType = 'thought' | 'tool_call' | 'tool_result' | 'thinking_token'
 
 export type StepCallback = (
@@ -35,13 +62,81 @@ export async function runReActLoop(
   tools: ToolDefinition[],
   memory: Memory,
   onStep?: StepCallback,
-  options: { stream?: boolean; client?: LlmClient; signal?: AbortSignal } = {}
+  options: {
+    stream?: boolean
+    client?: LlmClient
+    signal?: AbortSignal
+    /** REQ-11 治理计数器；缺省表示不做熔断与上限控制 */
+    guard?: ToolCallGuard
+  } = {}
 ): Promise<string> {
   // 按角色路由的 LLM 客户端（缺省用全局单例，行为与路由开启前一致）
   const llm = options.client || llmClient
   const signal = options.signal
   const useStream = options.stream !== false
+  const guard = options.guard
+  const seenCalls = new Map<string, number>()
+  let toolCallLimitReached = false
   memory.add({ role: 'system', content: systemPrompt })
+
+  /** 工具调用数是否已达上限 */
+  const toolBudgetReached = (): boolean =>
+    !!guard && guard.maxToolCalls > 0 && guard.toolCalls >= guard.maxToolCalls
+
+  /** 达到上限时统一提示，外层据此提前进入强制总结 */
+  const noteToolLimit = (): void => {
+    logger.warn('工具调用达到上限，提前进入强制总结', { toolCalls: guard?.toolCalls })
+    if (onStep) {
+      onStep('thought', '工具调用次数已达上限，改为基于已收集的信息直接给出最终结论（JSON 格式）。')
+    }
+  }
+
+  /** 执行单个工具调用，含重复调用熔断与计数 */
+  async function runToolCall(toolCall: PendingToolCall): Promise<void> {
+    if (onStep) onStep('tool_call', toolCall.name, toolCall.input)
+
+    // 相同工具 + 相同参数重复出现：超过阈值后不执行，改为让模型换策略
+    const signature = `${toolCall.name}::${stableStringify(toolCall.input)}`
+    const seen = seenCalls.get(signature) ?? 0
+    if (guard && guard.repeatThreshold > 0 && seen >= guard.repeatThreshold) {
+      guard.loopBreaks += 1
+      const message = `工具 ${toolCall.name} 以相同参数重复调用，已熔断。请更换策略或直接给出最终结论（JSON 格式）。`
+      logger.warn('重复工具调用被熔断', { tool: toolCall.name, repeats: seen })
+      if (onStep) onStep('thought', message)
+      memory.add({ role: 'tool', content: message, toolCallId: toolCall.id, name: toolCall.name })
+      return
+    }
+
+    seenCalls.set(signature, seen + 1)
+    if (guard) guard.toolCalls += 1
+
+    try {
+      const result = await toolRegistry.execute({
+        id: toolCall.id,
+        name: toolCall.name,
+        input: toolCall.input
+      })
+      if (onStep) onStep('tool_result', toolCall.name, result)
+
+      memory.add({
+        role: 'tool',
+        content: result,
+        toolCallId: toolCall.id,
+        name: toolCall.name
+      })
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error'
+      logger.warn(`Tool ${toolCall.name} failed: ${errorMsg}`)
+
+      // 工具失败恢复：将错误信息反馈给 LLM
+      memory.add({
+        role: 'tool',
+        content: `Error: ${errorMsg}. Please try a different approach or skip this check.`,
+        toolCallId: toolCall.id,
+        name: toolCall.name
+      })
+    }
+  }
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
     if (signal?.aborted) {
@@ -90,36 +185,17 @@ export async function runReActLoop(
           }))
         })
 
-        // 执行工具并记录结果
+        // 执行工具并记录结果（受 REQ-11 治理约束）
         for (const toolCall of pendingToolCalls) {
-          if (onStep) onStep('tool_call', toolCall.name, toolCall.input)
-
-          try {
-            const result = await toolRegistry.execute({
-              id: toolCall.id,
-              name: toolCall.name,
-              input: toolCall.input
-            })
-            if (onStep) onStep('tool_result', toolCall.name, result)
-
-            memory.add({
-              role: 'tool',
-              content: result,
-              toolCallId: toolCall.id,
-              name: toolCall.name
-            })
-          } catch (error) {
-            const errorMsg = error instanceof Error ? error.message : 'Unknown error'
-            logger.warn(`Tool ${toolCall.name} failed: ${errorMsg}`)
-
-            // 工具失败恢复：将错误信息反馈给 LLM
-            memory.add({
-              role: 'tool',
-              content: `Error: ${errorMsg}. Please try a different approach or skip this check.`,
-              toolCallId: toolCall.id,
-              name: toolCall.name
-            })
+          if (toolBudgetReached()) {
+            toolCallLimitReached = true
+            break
           }
+          await runToolCall(toolCall)
+        }
+        if (toolCallLimitReached) {
+          noteToolLimit()
+          break
         }
         // 继续下一轮
         continue
@@ -164,28 +240,15 @@ export async function runReActLoop(
         })
 
         for (const toolCall of response.toolCalls) {
-          if (onStep) onStep('tool_call', toolCall.name, toolCall.input)
-
-          try {
-            const result = await toolRegistry.execute(toolCall)
-            if (onStep) onStep('tool_result', toolCall.name, result)
-            memory.add({
-              role: 'tool',
-              content: result,
-              toolCallId: toolCall.id,
-              name: toolCall.name
-            })
-          } catch (error) {
-            const errorMsg = error instanceof Error ? error.message : 'Unknown error'
-            logger.warn(`Tool ${toolCall.name} failed: ${errorMsg}`)
-
-            memory.add({
-              role: 'tool',
-              content: `Error: ${errorMsg}. Please try a different approach or skip this check.`,
-              toolCallId: toolCall.id,
-              name: toolCall.name
-            })
+          if (toolBudgetReached()) {
+            toolCallLimitReached = true
+            break
           }
+          await runToolCall(toolCall)
+        }
+        if (toolCallLimitReached) {
+          noteToolLimit()
+          break
         }
       }
     }

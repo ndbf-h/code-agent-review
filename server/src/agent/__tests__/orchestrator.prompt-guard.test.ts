@@ -2,6 +2,11 @@ import { describe, expect, it, vi } from 'vitest'
 import type { LlmMessage } from '../types'
 import { runReviewTask } from '../orchestrator'
 
+// orchestrator 读取治理配置，这里提供最小可用环境变量（不会连接任何服务）
+process.env.DATABASE_URL = 'postgres://user:pass@localhost:5432/test'
+process.env.RABBITMQ_URL = 'amqp://localhost:5672'
+process.env.LLM_API_KEY = 'test-key'
+
 /**
  * REQ-10 验收：orchestrator 发给 LLM 的内容必须用定界标签包裹被审查代码，
  * 并在命中注入规则时把结论写入报告的 security 字段。

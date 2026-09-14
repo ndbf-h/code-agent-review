@@ -193,6 +193,20 @@ async function requestFix() {
       </ul>
     </div>
 
+    <!-- 0.1 ReAct 治理信息（REQ-11）：仅在发生工具调用、熔断或预算降级时展示 -->
+    <div v-if="report.governance" class="governance-bar">
+      <span class="gov-title">审查过程</span>
+      <span v-if="report.governance.toolCalls > 0" class="gov-item">
+        工具调用 {{ report.governance.toolCalls }} 次
+      </span>
+      <span v-if="report.governance.loopBreaks > 0" class="gov-item gov-warn">
+        重复调用熔断 {{ report.governance.loopBreaks }} 次
+      </span>
+      <span v-if="report.governance.budgetExceeded" class="gov-item gov-warn">
+        已触发 token 预算降级
+      </span>
+    </div>
+
     <!-- 1. 评分头 + 严重度图块（图块即筛选器） -->
     <div class="score-bar">
       <div class="score-ring" :style="{ '--score-color': getScoreColor(report.score) }">
@@ -707,5 +721,36 @@ async function requestFix() {
   padding-left: 18px;
   font-size: 12px;
   color: var(--color-text-muted);
+}
+
+/* ── 治理统计条（REQ-11） ── */
+.governance-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.gov-title {
+  font-weight: 700;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.gov-item {
+  white-space: nowrap;
+}
+
+.gov-warn {
+  color: var(--color-warning-text);
+  font-weight: 600;
 }
 </style>

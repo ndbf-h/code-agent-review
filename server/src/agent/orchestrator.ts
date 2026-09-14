@@ -1,5 +1,7 @@
 import { Memory } from './memory'
-import { runReActLoop } from './react-loop'
+import { runReActLoop, type ToolCallGuard } from './react-loop'
+import { createTaskBudget } from './budget'
+import { getConfig } from '../config'
 import { getRolePrompt } from './roles/index'
 import { toolRegistry } from './tool-registry'
 import { getClientForRole } from './role-router'
@@ -90,7 +92,8 @@ async function runReviewer(
   planningContext: string,
   onEvent: (event: ReviewEvent) => void,
   scopeId?: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  guard?: ToolCallGuard
 ): Promise<ReviewerResult> {
   const reviewerId = `${role}-${taskId}`
   if (signal?.aborted) {
@@ -204,7 +207,7 @@ async function runReviewer(
             })
           }
         },
-        { stream: true, client: getClientForRole(role), signal }
+        { stream: true, client: getClientForRole(role), signal, guard }
       )
 
       if (attempt > 0) {
@@ -283,6 +286,16 @@ async function runReviewer(
         maxAttempts: maxReActAttempts,
         error: errorMsg
       })
+
+      // REQ-11：工具调用已达上限时不再重试，避免外层重试与内层轮次叠加
+      if (guard && guard.maxToolCalls > 0 && guard.toolCalls >= guard.maxToolCalls) {
+        logger.warn('工具调用已达上限，放弃重试并回退规则引擎', {
+          role,
+          taskId,
+          toolCalls: guard.toolCalls
+        })
+        break
+      }
 
       // 还有重试机会，继续循环
       if (attempt < maxReActAttempts - 1) continue
@@ -522,6 +535,12 @@ async function runReviewTask(
   const reviewerResults: Record<string, { issues: Issue[]; score: number }> = {}
   const reviewStatus: Record<string, 'success' | 'fallback' | 'failed'> = {}
 
+  // REQ-11：每个 reviewer 一份治理计数器（该 reviewer 的重试共享），另加任务级 token 预算
+  const config = getConfig()
+  const guards: Record<string, ToolCallGuard> = {}
+  const budget = createTaskBudget(config.agent.taskTokenBudget)
+  let budgetExceeded = false
+
   // 为每个 reviewer 记录开始时间
   const reviewerStartTimes: Record<string, number> = {}
 
@@ -543,9 +562,48 @@ async function runReviewTask(
     reviewerRoles.map(async role => {
       reviewerStartTimes[role] = performance.now()
       const context = buildPlanningContext(role)
-      const result = await withReviewerSpan(role, () =>
-        runReviewer(role, taskId, code, language, codeStats, context, onEvent, scopeId, signal)
-      )
+      const guard: ToolCallGuard = {
+        repeatThreshold: config.agent.reactRepeatThreshold,
+        maxToolCalls: config.agent.reactMaxToolCalls,
+        loopBreaks: 0,
+        toolCalls: 0
+      }
+      guards[role] = guard
+      const reviewerId = `${role}-${taskId}`
+
+      const result = await withReviewerSpan(role, async () => {
+        // REQ-11：预算耗尽后不再调用 LLM，该维度直接使用规则引擎
+        if (budget.isExceeded()) {
+          budgetExceeded = true
+          onEvent({
+            type: 'agent_thought',
+            agentId: reviewerId,
+            role,
+            message: '已超出任务 token 预算，改由规则引擎完成本次审查'
+          })
+          const fallback = runRuleOnlyReview(role, code, language)
+          onEvent({
+            type: 'agent_done',
+            agentId: reviewerId,
+            role,
+            message: `${role} 审查完成（预算降级，${fallback.issues.length} 个问题）`
+          })
+          return { ...fallback, method: 'rule-fallback' as const }
+        }
+
+        return runReviewer(
+          role,
+          taskId,
+          code,
+          language,
+          codeStats,
+          context,
+          onEvent,
+          scopeId,
+          signal,
+          guard
+        )
+      })
       agentLatency.reviewers[role] = Math.round(performance.now() - reviewerStartTimes[role])
       return { role, result }
     })
@@ -673,6 +731,16 @@ async function runReviewTask(
         excerpt: redactSecrets(item.excerpt)
       }))
     }
+  }
+
+  // REQ-11：汇总 ReAct 治理统计，只有真正发生工具调用、熔断或预算降级时才写入报告
+  const governance = {
+    loopBreaks: Object.values(guards).reduce((sum, item) => sum + item.loopBreaks, 0),
+    toolCalls: Object.values(guards).reduce((sum, item) => sum + item.toolCalls, 0),
+    budgetExceeded
+  }
+  if (governance.loopBreaks > 0 || governance.toolCalls > 0 || governance.budgetExceeded) {
+    finalReport.governance = governance
   }
 
   const t4 = performance.now()
