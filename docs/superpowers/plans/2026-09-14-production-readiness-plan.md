@@ -52,10 +52,10 @@
 
 ### 批次 5：LLM 治理（REQ-10、REQ-11）
 
-- [ ] `security/prompt-guard.ts`（detectInjection、wrapUntrustedCode、redactSecrets、INJECTION_HARDENING_PROMPT）
-- [ ] 五个角色 prompt 加固；orchestrator 三处代码注入点包裹；报告 `security` 字段；写入前脱敏
-- [ ] react-loop 重复调用熔断与工具调用上限；`agent/budget.ts`；orchestrator 预算分支；报告 `governance` 字段
-- [ ] `shared/types.ts` 扩展；前端 ReviewReport 提示条与治理信息
+- [x] `security/prompt-guard.ts`（detectInjection、wrapUntrustedCode、redactSecrets、INJECTION_HARDENING_PROMPT）
+- [x] 五个角色 prompt 加固；orchestrator 三处代码注入点包裹；报告 `security` 字段；写入前脱敏
+- [x] react-loop 重复调用熔断与工具调用上限；`agent/budget.ts`；orchestrator 预算分支；报告 `governance` 字段
+- [x] `shared/types.ts` 扩展；前端 ReviewReport 提示条与治理信息
 - 验收：prompt-guard / react-loop / budget / orchestrator 单测通过；client `vue-tsc -b` 通过；基线通过
 
 ### 批次 6：对外能力一（REQ-12、REQ-13、REQ-16）
@@ -81,7 +81,7 @@
 
 ## 进度台账
 
-更新时间：2026-09-14 21:30
+更新时间：2026-09-14 22:10
 
 | 批次 | 状态 | 说明 |
 | --- | --- | --- |
@@ -89,7 +89,7 @@
 | 2 | 已完成，验收通过 | 验收"有条件通过"提出的 4 项整改（fetch-url 上限、ConfigError 信息、探针兜底、closeDb 竞态）已全部修复 |
 | 3 | 已完成，验收通过 | 验收"有条件通过"提出的 2 项重要整改（cancel / stream 用例、访问日志监听 close）已修复；pretty 日志改同步写 |
 | 4 | 已完成，验收通过 | 验收"通过"附带的 3 项轻微建议（/assets/ 安全头补齐、解锁失败销毁连接、.dockerignore 保留旧规则）已修复 |
-| 5 | 待开始 | 下次从这里继续：REQ-10 提示注入防御、REQ-11 ReAct 治理 |
+| 5 | 已完成，验收命令通过 | REQ-10 输入隔离与脱敏、REQ-11 ReAct 治理；提交 `0807498`、`4a897cc`；验收命令 server vitest、client `vue-tsc -b` 通过 |
 | 6 | 待开始 | |
 | 7 | 待开始 | |
 | 8 | 待开始 | |
@@ -110,8 +110,8 @@
 
 ### 暂停时的状态（2026-09-14）
 
-- 已完成批次 1 到 4，对应 REQ-01 到 REQ-09，四个批次均验收通过且整改项已关闭；server 单测 21 文件 / 161 用例，lint、typecheck、format、build 全部通过。
-- 下次直接进入批次 5（REQ-10、REQ-11），实施前先通读 PRD 第 4 章全局约束与批次 5 任务项。
+- 已完成批次 1 到 5，对应 REQ-01 到 REQ-11；批次 5 的验收命令（server `vitest run`、client `vue-tsc -b`）已通过，server 单测 26 文件 / 186 用例，lint、typecheck、format、build 全部通过。
+- 下次直接进入批次 6（REQ-12 API Key 鉴权、REQ-13 报告导出、REQ-16 OpenAPI），实施前先通读 PRD 第 4 章全局约束与批次 6 任务项。
 - 尚未处理的轻微建议：tasks.ts 处理器内直接 `res.json` 的 502 / 500 响应体不含 requestId；`createTaskBodySchema()` 每请求重建 schema（可按 maxCodeChars 缓存）；`vue/multi-word-component-names` 规则关闭需在 CHANGELOG 说明（批次 8）。
 - 本机验证限制：Docker 守护进程未运行，Dockerfile 只做了静态检查，镜像构建交由 CI 的 docker job 验证。本轮 CI 触发范围已扩展到 `develop`，集成线上的镜像构建同样会被流水线验证。
 - 仓库对应关系：本文件第 13 行提到的 `D:\Users\zhiquan.huang\code review` 与本机 `d:/Code/code-agent-review` 指向同一远端仓库 `ndbf-h/code-agent-review`（提交作者一致、远端仅此一个），两份工作副本通过 `develop` 分支同步即可，无需另建分支做设备隔离。
