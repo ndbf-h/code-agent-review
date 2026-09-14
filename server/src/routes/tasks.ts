@@ -59,6 +59,9 @@ const logger = createLogger('tasks')
 const tasksRouter = Router()
 const metricsRouter = Router()
 
+/** 带路径参数的路由请求类型（express 5 起 params 值可能为数组，需显式收窄为 string） */
+type TaskIdRequest = Request<{ id: string }>
+
 /** 所有 /:id 路径参数统一要求 UUID */
 const withTaskId = validate({ params: taskIdParamsSchema })
 
@@ -139,7 +142,7 @@ tasksRouter.post(
 tasksRouter.post(
   '/:id/cancel',
   withTaskId,
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: TaskIdRequest, res: Response, next: NextFunction) => {
     try {
       const taskId = req.params.id
       const task = await getTask(taskId)
@@ -180,23 +183,27 @@ tasksRouter.get(
 )
 
 // GET /api/tasks/:id
-tasksRouter.get('/:id', withTaskId, async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const detail = await getTaskDetail(req.params.id)
-    if (!detail.task) {
-      throw new TaskError('Task not found', 'TASK_NOT_FOUND', 404)
+tasksRouter.get(
+  '/:id',
+  withTaskId,
+  async (req: TaskIdRequest, res: Response, next: NextFunction) => {
+    try {
+      const detail = await getTaskDetail(req.params.id)
+      if (!detail.task) {
+        throw new TaskError('Task not found', 'TASK_NOT_FOUND', 404)
+      }
+      res.json(detail)
+    } catch (error) {
+      next(error)
     }
-    res.json(detail)
-  } catch (error) {
-    next(error)
   }
-})
+)
 
 // POST /api/tasks/:id/chat/stream - discuss a completed review with the assistant
 tasksRouter.post(
   '/:id/chat/stream',
   validate({ params: taskIdParamsSchema, body: chatBodySchema }),
-  async (req: Request, res: Response) => {
+  async (req: TaskIdRequest, res: Response) => {
     const taskId = req.params.id
     const { message: userMessage } = req.body as ChatBody
 
@@ -268,7 +275,7 @@ tasksRouter.post(
 tasksRouter.post(
   '/:id/versions',
   validate({ params: taskIdParamsSchema, body: versionBodySchema }),
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: TaskIdRequest, res: Response, next: NextFunction) => {
     try {
       const taskId = req.params.id
       const { code, language, summary } = req.body as VersionBody
@@ -297,7 +304,7 @@ tasksRouter.post(
 tasksRouter.post(
   '/:id/guidelines',
   validate({ params: taskIdParamsSchema, body: guidelineBodySchema }),
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: TaskIdRequest, res: Response, next: NextFunction) => {
     try {
       const task = await getTask(req.params.id)
       if (!task) {
@@ -324,7 +331,7 @@ tasksRouter.post(
 )
 
 // GET /api/tasks/:id/stream — 订阅任务事件流（回放 + 实时推送，不再触发执行）
-tasksRouter.get('/:id/stream', withTaskId, async (req: Request, res: Response) => {
+tasksRouter.get('/:id/stream', withTaskId, async (req: TaskIdRequest, res: Response) => {
   const taskId = req.params.id
 
   // 续传位点：浏览器 EventSource 自动重连带 Last-Event-Id 头；本服务手动重连用 ?after=
@@ -448,7 +455,7 @@ tasksRouter.get('/:id/stream', withTaskId, async (req: Request, res: Response) =
 tasksRouter.post(
   '/:id/fix',
   validate({ params: taskIdParamsSchema, body: fixBodySchema }),
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: TaskIdRequest, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params
       const { code: bodyCode, language: bodyLanguage } = req.body as FixBody
