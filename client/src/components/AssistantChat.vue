@@ -3,7 +3,7 @@ import { nextTick, ref } from 'vue'
 import { useReviewStore } from '../stores/review'
 import ChatMessage from './ChatMessage.vue'
 import CodeDiff from './CodeDiff.vue'
-import axios from 'axios'
+import { API_BASE, authHeaders, http, isAxiosError } from '../api/http'
 import { ElMessage } from 'element-plus'
 import type { ChatMessage as ChatMessageType } from '../types/index'
 import type { FixResult } from '../types/index'
@@ -41,14 +41,11 @@ async function send(): Promise<void> {
   sending.value = true
 
   try {
-    const response = await fetch(
-      `${import.meta.env.VITE_API_BASE || 'http://localhost:3001/api'}/tasks/${store.taskId}/chat/stream`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message })
-      }
-    )
+    const response = await fetch(`${API_BASE}/tasks/${store.taskId}/chat/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ message })
+    })
     if (!response.ok || !response.body)
       throw new Error(`Assistant request failed (${response.status})`)
 
@@ -91,21 +88,16 @@ async function send(): Promise<void> {
 async function acceptProposal(): Promise<void> {
   if (!proposal.value || !store.taskId) return
   try {
-    const { data } = await axios.post(
-      `${import.meta.env.VITE_API_BASE || 'http://localhost:3001/api'}/tasks/${store.taskId}/versions`,
-      {
-        code: proposal.value.fixedCode,
-        language: proposal.value.language,
-        summary: 'Accepted assistant code proposal'
-      }
-    )
+    const { data } = await http.post(`/tasks/${store.taskId}/versions`, {
+      code: proposal.value.fixedCode,
+      language: proposal.value.language,
+      summary: 'Accepted assistant code proposal'
+    })
     proposalAccepted.value = true
     proposalVersionId.value = data.version?.id || null
     ElMessage.success('修改后的代码版本已保存')
   } catch (error) {
-    ElMessage.error(
-      axios.isAxiosError(error) ? error.response?.data?.error || '保存失败' : '保存失败'
-    )
+    ElMessage.error(isAxiosError(error) ? error.response?.data?.error || '保存失败' : '保存失败')
   }
 }
 
@@ -124,14 +116,11 @@ async function handleFile(file: File | undefined): Promise<void> {
   uploading.value = true
   uploadMessage.value = ''
   try {
-    const response = await fetch(
-      `${import.meta.env.VITE_API_BASE || 'http://localhost:3001/api'}/tasks/${store.taskId}/guidelines`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileName: file.name, content: await file.text() })
-      }
-    )
+    const response = await fetch(`${API_BASE}/tasks/${store.taskId}/guidelines`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ fileName: file.name, content: await file.text() })
+    })
     const data = (await response.json()) as { error?: string; chunkCount?: number }
     if (!response.ok) throw new Error(data.error || '上传失败')
     uploadMessage.value = `已加入知识库，切分为 ${data.chunkCount} 个片段`

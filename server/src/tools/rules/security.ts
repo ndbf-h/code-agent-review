@@ -1,4 +1,5 @@
 // server/src/tools/rules/security.ts
+import { redactSecrets } from '../../security/prompt-guard'
 import type { Rule } from './types'
 
 export const securityRules: Rule[] = [
@@ -24,7 +25,8 @@ export const securityRules: Rule[] = [
     pattern: /(api[_-]?key|secret|password|token)\s*[:=]\s*["'][^"'\s]{8,}["']/gi,
     severity: 'critical',
     category: '硬编码密钥',
-    message: m => `发现硬编码的敏感信息：${m[0].substring(0, 50)}...`,
+    // 先脱敏再截断：命中片段本身可能包含密钥原文
+    message: m => `发现硬编码的敏感信息：${redactSecrets(m[0]).substring(0, 50)}...`,
     suggestion: '将密钥移至环境变量或密钥管理服务，使用 process.env 或配置中心获取'
   },
   {

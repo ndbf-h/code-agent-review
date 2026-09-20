@@ -136,3 +136,43 @@ CI（`.github/workflows/ci.yml`）在 `push master`、`push develop` 和 Pull Re
 | `hotfix/v<版本>` | 线上出现紧急缺陷时 | `master` | 合回 `master` 和 `develop`，然后删除 |
 
 `release/*` 上只允许版本号、文档和缺陷修复，不引入新功能。项目目前还没有正式版本号与发布节奏，这一层等第一次发版时再启用即可。
+
+## 八、本地环境要求
+
+| 依赖 | 版本 | 说明 |
+| --- | --- | --- |
+| Node.js | 22 及以上（CI 使用 22） | `node -v` 确认 |
+| npm | 随 Node 附带 | 仓库使用 `package-lock.json`，不要混用 pnpm/yarn |
+| PostgreSQL | 16 及以上 | 本地可用 `docker compose up -d db` 启动 |
+| RabbitMQ | 3.13（含管理插件） | 本地可用 `docker compose up -d rabbitmq` 启动 |
+| Docker | 可选 | 一键起全部服务或验证镜像构建 |
+
+首次准备：
+
+```bash
+cp .env.example .env    # 至少填写 LLM_API_KEY
+npm install             # 根目录工具链
+npm run install:all     # server + client 依赖
+```
+
+常用的单包命令：
+
+```bash
+npm run dev             # 前后端一起启动
+npm run typecheck       # server + client 类型检查
+npm test                # server + client 单元测试
+```
+
+## 九、Pull Request 检查清单
+
+提交 PR 前逐条确认：
+
+- [ ] 分支名符合第一节的命名规范，且从最新的 `develop` 拉出
+- [ ] 提交信息符合第二节的格式，一次提交只做一件事
+- [ ] 已跑通第五节的验证清单（lint / format / typecheck / test / build）
+- [ ] 新增逻辑附带单元测试；涉及 DB / MQ / LLM / 外部 HTTP 的部分使用依赖注入 + mock
+- [ ] 新增环境变量已同步到 `.env.example`，并给出安全默认值
+- [ ] 前后端共享类型只放在 `shared/types.ts`
+- [ ] 文档使用简体中文、不含表情符号；未提交任何明文密钥
+- [ ] 涉及破坏性变更时，已在 `CHANGELOG.md` 与文档中说明
+- [ ] 合并后删除该分支，并把 `develop` 推送到远端

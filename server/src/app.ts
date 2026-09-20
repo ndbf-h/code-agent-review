@@ -4,8 +4,11 @@ import helmet from 'helmet'
 import type { AppConfig } from './config'
 import { AppError } from './errors'
 import { createRateLimiter } from './middleware/rateLimiter'
+import { createApiKeyAuth } from './middleware/apiKeyAuth'
 import { tasksRouter, metricsRouter } from './routes/tasks'
 import { createHealthRouter, type HealthDeps } from './routes/health'
+import { createDocsRouter } from './routes/docs'
+import { createGitHubWebhookRouter } from './integrations/github/webhook'
 import { mountMcpEndpoint } from './mcp/server'
 import { requestContextMiddleware } from './middleware/requestContext'
 import { accessLogMiddleware } from './middleware/accessLog'
@@ -25,6 +28,8 @@ export interface AppDeps {
   rateLimits?: { global?: RateLimitSpec; review?: RateLimitSpec }
   /** 是否挂载 /mcp（默认 true） */
   mountMcp?: boolean
+  /** REQ-15：Webhook 创建任务后的入队函数 */
+  publishTask?: (taskId: string) => Promise<void>
 }
 
 /** body-parser 抛出的错误带 type 字段，用于映射为结构化 4xx 响应 */
@@ -82,8 +87,25 @@ export function createApp(deps: AppDeps): Express {
   const globalSpec = deps.rateLimits?.global ?? { maxRequests: 100, windowMs: 60_000 }
   app.use(createRateLimiter(globalSpec.maxRequests, globalSpec.windowMs))
 
+  // REQ-12：API Key 鉴权（API_KEYS 为空时直通），挂在 MCP 之前使 /mcp 同样受保护
+  app.use(
+    createApiKeyAuth({
+      apiKeys: config.auth.apiKeys,
+      warnIfDisabled: config.env === 'production'
+    })
+  )
+
   // MCP 端点自管 body 解析，必须在全局 express.json() 之前挂载
   if (deps.mountMcp !== false) mountMcpEndpoint(app)
+
+  // REQ-15：Webhook 需要原始 body 做 HMAC 校验，同样必须早于 express.json()
+  app.use(
+    '/api/webhooks',
+    createGitHubWebhookRouter({
+      secret: config.github.webhookSecret,
+      publishTask: deps.publishTask
+    })
+  )
 
   app.use(express.json({ limit: config.http.maxBodySize }))
 
@@ -91,6 +113,8 @@ export function createApp(deps: AppDeps): Express {
   app.use('/api/tasks', createRateLimiter(reviewSpec.maxRequests, reviewSpec.windowMs), tasksRouter)
   app.use('/api/metrics', metricsRouter)
   app.use('/api/health', createHealthRouter(deps.health))
+  // REQ-16：接口文档（/api/openapi.json、/api/docs），无需鉴权
+  app.use('/api', createDocsRouter())
 
   app.use((_req: Request, res: Response) => {
     res.status(404).json({ error: '接口不存在', code: 'NOT_FOUND' })

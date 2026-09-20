@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import axios from 'axios'
-
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001/api'
+import { http } from '../api/http'
 
 interface MetricsData {
   tokenUsage: {
@@ -32,7 +30,7 @@ async function fetchMetrics() {
   try {
     loading.value = true
     error.value = null
-    const res = await axios.get<MetricsData>(`${API_BASE}/metrics`)
+    const res = await http.get<MetricsData>('/metrics')
     metrics.value = res.data
   } catch (err) {
     error.value = '获取 metrics 失败'

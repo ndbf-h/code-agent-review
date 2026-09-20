@@ -52,18 +52,18 @@
 
 ### 批次 5：LLM 治理（REQ-10、REQ-11）
 
-- [ ] `security/prompt-guard.ts`（detectInjection、wrapUntrustedCode、redactSecrets、INJECTION_HARDENING_PROMPT）
-- [ ] 五个角色 prompt 加固；orchestrator 三处代码注入点包裹；报告 `security` 字段；写入前脱敏
-- [ ] react-loop 重复调用熔断与工具调用上限；`agent/budget.ts`；orchestrator 预算分支；报告 `governance` 字段
-- [ ] `shared/types.ts` 扩展；前端 ReviewReport 提示条与治理信息
+- [x] `security/prompt-guard.ts`（detectInjection、wrapUntrustedCode、redactSecrets、INJECTION_HARDENING_PROMPT）
+- [x] 五个角色 prompt 加固；orchestrator 三处代码注入点包裹；报告 `security` 字段；写入前脱敏
+- [x] react-loop 重复调用熔断与工具调用上限；`agent/budget.ts`；orchestrator 预算分支；报告 `governance` 字段
+- [x] `shared/types.ts` 扩展；前端 ReviewReport 提示条与治理信息
 - 验收：prompt-guard / react-loop / budget / orchestrator 单测通过；client `vue-tsc -b` 通过；基线通过
 
 ### 批次 6：对外能力一（REQ-12、REQ-13、REQ-16）
 
-- [ ] `middleware/apiKeyAuth.ts`，白名单路径，stream 的 `api_key` 查询参数，生产 WARN
-- [ ] 前端统一 axios 实例 + API Key 设置 + SSE URL 附带
-- [ ] `export/markdown.ts`、`export/sarif.ts`，两个导出路由，前端导出按钮
-- [ ] `openapi.ts`、`/api/openapi.json`、`/api/docs`
+- [x] `middleware/apiKeyAuth.ts`，白名单路径，stream 的 `api_key` 查询参数，生产 WARN
+- [x] 前端统一 axios 实例 + API Key 设置 + SSE URL 附带
+- [x] `export/markdown.ts`、`export/sarif.ts`，两个导出路由，前端导出按钮
+- [x] `openapi.ts`、`/api/openapi.json`、`/api/docs`
 - 验收：auth / export / openapi 单测通过；client 全量检查通过；基线通过
 
 ### 批次 7：对外能力二（REQ-14、REQ-15）
@@ -75,13 +75,13 @@
 
 ### 批次 8：文档收口（REQ-17）
 
-- [ ] SECURITY.md、CONTRIBUTING.md、CHANGELOG.md
-- [ ] README（新能力、配置、探针、导出、鉴权、Webhook、CI 徽章、LICENSE 提示）、`docs/optimization-log.md` 登记本轮
+- [x] SECURITY.md、CONTRIBUTING.md、CHANGELOG.md
+- [x] README（新能力、配置、探针、导出、鉴权、Webhook、CI 徽章、LICENSE 提示）、`docs/optimization-log.md` 登记本轮
 - 验收：全量 lint / typecheck / test / build 通过
 
 ## 进度台账
 
-更新时间：2026-09-14 17:30
+更新时间：2026-09-20 15:30
 
 | 批次 | 状态 | 说明 |
 | --- | --- | --- |
@@ -89,15 +89,31 @@
 | 2 | 已完成，验收通过 | 验收"有条件通过"提出的 4 项整改（fetch-url 上限、ConfigError 信息、探针兜底、closeDb 竞态）已全部修复 |
 | 3 | 已完成，验收通过 | 验收"有条件通过"提出的 2 项重要整改（cancel / stream 用例、访问日志监听 close）已修复；pretty 日志改同步写 |
 | 4 | 已完成，验收通过 | 验收"通过"附带的 3 项轻微建议（/assets/ 安全头补齐、解锁失败销毁连接、.dockerignore 保留旧规则）已修复 |
-| 5 | 待开始 | 下次从这里继续：REQ-10 提示注入防御、REQ-11 ReAct 治理 |
-| 6 | 待开始 | |
+| 5 | 已完成，验收命令通过 | REQ-10 输入隔离与脱敏、REQ-11 ReAct 治理；提交 `0807498`、`4a897cc`；验收命令 server vitest、client `vue-tsc -b` 通过 |
+| 6 | 已完成，验收命令通过 | REQ-12 鉴权与前端 HTTP 客户端、REQ-13 Markdown/SARIF 导出、REQ-16 OpenAPI 文档；提交 `819b0f7`；server `vitest run`、client `vue-tsc -b` 与 `vitest run` 通过 |
 | 7 | 待开始 | |
-| 8 | 待开始 | |
+| 8 | 已完成，验收命令通过 | REQ-17 文档收口：`SECURITY.md`、`CHANGELOG.md` 新建，`CONTRIBUTING.md` 补环境要求与 PR 检查清单，README 增补六类能力说明与 CI 徽章，`docs/optimization-log.md` 登记本轮；全量 lint / typecheck / test / build 通过 |
+
+### 批次外任务登记（2026-09-14 晚）
+
+以下为本计划之外、为后续批次铺路的工程改动，均已在本地跑通验证：
+
+| 项目 | 内容 | 验证 |
+| --- | --- | --- |
+| 依赖升级 | Dependabot 8 个分支合并：`actions/checkout` v7、`actions/setup-node` v7、`docker/setup-buildx-action` v4、`docker/build-push-action` v7、`vite` 8.3.0、`vue-tsc` 3.3.11、`zod` 4.6.2、`tsx` 4.23.13 | lint、format、typecheck、test（server 161 / client 7）、build 全部通过 |
+| Express 5 迁移 | `express` 4.21 → 5.2.1、`@types/express` 4 → 5；`server/src/routes/tasks.ts` 新增 `TaskIdRequest = Request<{ id: string }>` 并应用于 7 个 `/:id` 路由，消除 express 5 下 `req.params` 值类型拓宽为 `string \| string[]` 引起的 18 处类型错误 | 同上，另加 server build |
+| 分支模型 | 确立 `master`（发布线）+ `develop`（集成线）双常驻分支；废弃按设备命名的 `work/*` 方案（分支名表达代码成熟度，设备差异由 `git config user.name / user.email` 区分） | 本地与远端分支一致 |
+| 治理文件 | 新增 `CONTRIBUTING.md`（分支模型、命名规则、提交信息规范、工作流程、硬性约束、提交前验证清单、依赖升级、发布分支启用条件）；README 简介后新增入口链接 | 已提交并推送 |
+| CI 触发范围 | `.github/workflows/ci.yml` 的 `on.push.branches` 由 `[master]` 扩展为 `[master, develop]`，与新增的集成分支配套。属对 REQ-02 验收项的有意调整，验收时应按更新后的配置核对 | 集成分支推送即触发流水线 |
+
+> 批次 8 的 REQ-17 要求新增 `CONTRIBUTING.md`。该文件已在本轮提前建立，批次 8 应在现有文件上补充"环境要求、PR 检查清单"等内容，不要覆盖重建，否则分支与提交规范会丢失。
 
 ### 暂停时的状态（2026-09-14）
 
-- 已完成批次 1 到 4，对应 REQ-01 到 REQ-09，四个批次均验收通过且整改项已关闭；server 单测 21 文件 / 161 用例，lint、typecheck、format、build 全部通过。
-- 下次直接进入批次 5（REQ-10、REQ-11），实施前先通读 PRD 第 4 章全局约束与批次 5 任务项。
+- 批次 1 到 8 全部完成，REQ-01 到 REQ-17 共 17 项需求均已实施并自测通过；server 单测 31 文件 / 235 用例，client 单测 2 文件 / 7 用例，lint（0 error）、format、typecheck、build 全部通过。
+- 后续可继续的方向（PRD 第六章「本轮不做」）：E2E（Playwright）、集中式限流、跨实例指标聚合、多用户与配额、GitLab / Bitbucket 接入与 PR 行内评论。
+- 待办：本机网络暂时不可达 GitHub，批次 6 之后的本地提交尚未推送，恢复后执行 `git push origin develop`。
 - 尚未处理的轻微建议：tasks.ts 处理器内直接 `res.json` 的 502 / 500 响应体不含 requestId；`createTaskBodySchema()` 每请求重建 schema（可按 maxCodeChars 缓存）；`vue/multi-word-component-names` 规则关闭需在 CHANGELOG 说明（批次 8）。
-- 本机验证限制：Docker 守护进程未运行，Dockerfile 只做了静态检查，镜像构建交由 CI 的 docker job 验证。
+- 本机验证限制：Docker 守护进程未运行，Dockerfile 只做了静态检查，镜像构建交由 CI 的 docker job 验证。本轮 CI 触发范围已扩展到 `develop`，集成线上的镜像构建同样会被流水线验证。
+- 仓库对应关系：本文件第 13 行提到的 `D:\Users\zhiquan.huang\code review` 与本机 `d:/Code/code-agent-review` 指向同一远端仓库 `ndbf-h/code-agent-review`（提交作者一致、远端仅此一个），两份工作副本通过 `develop` 分支同步即可，无需另建分支做设备隔离。
 - 工作方式：产品经理与验收由子智能体承担，开发由主智能体直接实施（子智能体开发效率不稳定）；每批次验收意见回流修复后再进入下一批。

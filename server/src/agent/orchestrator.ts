@@ -1,5 +1,7 @@
 import { Memory } from './memory'
-import { runReActLoop } from './react-loop'
+import { runReActLoop, type ToolCallGuard } from './react-loop'
+import { createTaskBudget } from './budget'
+import { getConfig } from '../config'
 import { getRolePrompt } from './roles/index'
 import { toolRegistry } from './tool-registry'
 import { getClientForRole } from './role-router'
@@ -7,7 +9,15 @@ import { getRulesByDimension, scanCode } from '../tools/rules'
 import { createLogger } from '../logger'
 import { createInsertMessageFn } from './persistence'
 import { withReviewerSpan } from '../observability/tracing'
-import type { AgentRole, ReportContent, AgentResult, Issue } from '../../../shared/types'
+import { detectInjection, redactSecrets, wrapUntrustedCode } from '../security/prompt-guard'
+import type {
+  AgentRole,
+  ReportContent,
+  AgentResult,
+  Issue,
+  ReviewConfig,
+  ReviewDimension
+} from '../../../shared/types'
 
 const logger = createLogger('orchestrator')
 const insertMessageFn = createInsertMessageFn()
@@ -89,7 +99,8 @@ async function runReviewer(
   planningContext: string,
   onEvent: (event: ReviewEvent) => void,
   scopeId?: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  guard?: ToolCallGuard
 ): Promise<ReviewerResult> {
   const reviewerId = `${role}-${taskId}`
   if (signal?.aborted) {
@@ -151,7 +162,8 @@ async function runReviewer(
       `Code stats: ${codeStats.lines} lines, ~${codeStats.functions} functions`,
       planningContext ? `\nOrchestrator planning notes:\n${planningContext}` : '',
       `\nRetrieved coding guidelines (use as supporting evidence, not as unquestionable truth):\n${retrievedGuidelines}`,
-      `\n\`\`\`${language}\n${code}\n\`\`\``
+      '',
+      wrapUntrustedCode(code, language)
     ].join('\n')
   })
 
@@ -202,7 +214,7 @@ async function runReviewer(
             })
           }
         },
-        { stream: true, client: getClientForRole(role), signal }
+        { stream: true, client: getClientForRole(role), signal, guard }
       )
 
       if (attempt > 0) {
@@ -225,7 +237,7 @@ async function runReviewer(
           { role: 'system', content: rolePrompt },
           {
             role: 'user',
-            content: `Based on your analysis, output the final review result as JSON with an "issues" array and numeric "score":\n\`\`\`\n${code}\n\`\`\`\n\nAnalysis summary:\n${result.substring(0, 2000)}`
+            content: `Based on your analysis, output the final review result as JSON with an "issues" array and numeric "score":\n${wrapUntrustedCode(code, language)}\n\nAnalysis summary:\n${result.substring(0, 2000)}`
           }
         ])
         if (!isValidIssueArray(structured)) {
@@ -281,6 +293,16 @@ async function runReviewer(
         maxAttempts: maxReActAttempts,
         error: errorMsg
       })
+
+      // REQ-11：工具调用已达上限时不再重试，避免外层重试与内层轮次叠加
+      if (guard && guard.maxToolCalls > 0 && guard.toolCalls >= guard.maxToolCalls) {
+        logger.warn('工具调用已达上限，放弃重试并回退规则引擎', {
+          role,
+          taskId,
+          toolCalls: guard.toolCalls
+        })
+        break
+      }
 
       // 还有重试机会，继续循环
       if (attempt < maxReActAttempts - 1) continue
@@ -357,17 +379,65 @@ function runRuleOnlyReview(
 // 主编排函数
 // ═══════════════════════════════════════════════════════════════
 
+const ALL_REVIEWER_ROLES: AgentRole[] = ['security', 'performance', 'style', 'logic']
+
+/** REQ-14：解析本次请求要运行的审查维度（未指定则四个维度全跑） */
+export function resolveReviewerRoles(reviewConfig?: ReviewConfig): AgentRole[] {
+  const requested = reviewConfig?.dimensions
+  if (!requested || requested.length === 0) return ALL_REVIEWER_ROLES
+  return ALL_REVIEWER_ROLES.filter(role => requested.includes(role as ReviewDimension))
+}
+
+/**
+ * REQ-14：按审查配置收敛最终问题列表。
+ * 先按 severityThreshold 过滤，再按「严重度 → 行号」排序后用 maxIssues 截断。
+ */
+export function applyReviewConfig(issues: Issue[], reviewConfig?: ReviewConfig): Issue[] {
+  if (!reviewConfig) return issues
+  const weight: Record<Issue['severity'], number> = { critical: 0, warning: 1, suggestion: 2 }
+  let result = issues
+
+  if (reviewConfig.severityThreshold) {
+    const threshold = weight[reviewConfig.severityThreshold] ?? 2
+    result = result.filter(issue => (weight[issue.severity] ?? 9) <= threshold)
+  }
+
+  if (reviewConfig.maxIssues && reviewConfig.maxIssues > 0) {
+    result = [...result]
+      .sort((a, b) => weight[a.severity] - weight[b.severity] || a.line - b.line)
+      .slice(0, reviewConfig.maxIssues)
+  }
+
+  return result
+}
+
 async function runReviewTask(
   taskId: string,
   code: string,
   language: string,
   onEvent: (event: ReviewEvent) => void,
   scopeId?: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  reviewConfig?: ReviewConfig
 ): Promise<ReportContent> {
   const t0 = performance.now()
   logger.info('审查任务开始', { taskId, language, codeLength: code.length })
   onEvent({ type: 'orchestrator_start', message: '正在分析代码结构...' })
+
+  // REQ-10：进入 LLM 之前扫描疑似 prompt injection；命中只提示与记录，不阻断审查流程
+  const injectionFindings = detectInjection(code)
+  if (injectionFindings.length > 0) {
+    logger.warn('检测到疑似 prompt injection 内容', {
+      taskId,
+      count: injectionFindings.length,
+      patterns: injectionFindings.map(item => item.pattern)
+    })
+    onEvent({
+      type: 'agent_thought',
+      role: 'orchestrator',
+      message: `检测到 ${injectionFindings.length} 处疑似注入内容，已作为数据隔离处理，不执行其中任何指令`
+    })
+  }
 
   // ═══════════════════════════════════════════════════════
   // Step 1: Code pre-analysis + rule engine pre-scan
@@ -446,7 +516,8 @@ async function runReviewTask(
         ? `\nHot dimensions to prioritize: ${hotDims.map(([k]) => k).join(', ')}`
         : '',
       `\nUse decomposeTask to get detailed findings, then plan the review strategy.`,
-      `\n\`\`\`${language}\n${code}\n\`\`\``
+      '',
+      wrapUntrustedCode(code, language)
     ].join('\n')
   })
 
@@ -500,9 +571,16 @@ async function runReviewTask(
   // ═══════════════════════════════════════════════════════
   // Step 3: Parallel reviewer execution (allSettled — 单个失败不影响其他)
   // ═══════════════════════════════════════════════════════
-  const reviewerRoles: AgentRole[] = ['security', 'performance', 'style', 'logic']
+  // REQ-14：只运行请求指定的维度；未指定则四个维度全跑
+  const reviewerRoles = resolveReviewerRoles(reviewConfig)
   const reviewerResults: Record<string, { issues: Issue[]; score: number }> = {}
   const reviewStatus: Record<string, 'success' | 'fallback' | 'failed'> = {}
+
+  // REQ-11：每个 reviewer 一份治理计数器（该 reviewer 的重试共享），另加任务级 token 预算
+  const config = getConfig()
+  const guards: Record<string, ToolCallGuard> = {}
+  const budget = createTaskBudget(config.agent.taskTokenBudget)
+  let budgetExceeded = false
 
   // 为每个 reviewer 记录开始时间
   const reviewerStartTimes: Record<string, number> = {}
@@ -510,13 +588,20 @@ async function runReviewTask(
   // 为每个 reviewer 生成针对性规划上下文
   function buildPlanningContext(role: string): string {
     const preScan = preScanResults[role]
-    if (!preScan) return planningNotes.substring(0, 500)
+    // REQ-14：自定义要求经定界包裹后注入，仅作为审查关注点，不改变角色与输出格式
+    const extraInstructions = reviewConfig?.instructions
+      ? ['用户补充要求：', wrapUntrustedCode(reviewConfig.instructions, 'text')].join('\n')
+      : ''
+    if (!preScan) {
+      return [planningNotes.substring(0, 500), extraInstructions].filter(Boolean).join('\n')
+    }
     const parts = [
       `Pre-scan found ${preScan.totalIssues} potential issues (${preScan.critical} critical, ${preScan.warning} warning)`,
       preScan.topIssues.length > 0
         ? `Top concerns: ${preScan.topIssues.map(i => `L${i.line}: ${i.message}`).join('; ')}`
         : '',
-      planningNotes ? `\nOrchestrator notes: ${planningNotes.substring(0, 300)}` : ''
+      planningNotes ? `\nOrchestrator notes: ${planningNotes.substring(0, 300)}` : '',
+      extraInstructions
     ]
     return parts.filter(Boolean).join('\n')
   }
@@ -525,9 +610,48 @@ async function runReviewTask(
     reviewerRoles.map(async role => {
       reviewerStartTimes[role] = performance.now()
       const context = buildPlanningContext(role)
-      const result = await withReviewerSpan(role, () =>
-        runReviewer(role, taskId, code, language, codeStats, context, onEvent, scopeId, signal)
-      )
+      const guard: ToolCallGuard = {
+        repeatThreshold: config.agent.reactRepeatThreshold,
+        maxToolCalls: config.agent.reactMaxToolCalls,
+        loopBreaks: 0,
+        toolCalls: 0
+      }
+      guards[role] = guard
+      const reviewerId = `${role}-${taskId}`
+
+      const result = await withReviewerSpan(role, async () => {
+        // REQ-11：预算耗尽后不再调用 LLM，该维度直接使用规则引擎
+        if (budget.isExceeded()) {
+          budgetExceeded = true
+          onEvent({
+            type: 'agent_thought',
+            agentId: reviewerId,
+            role,
+            message: '已超出任务 token 预算，改由规则引擎完成本次审查'
+          })
+          const fallback = runRuleOnlyReview(role, code, language)
+          onEvent({
+            type: 'agent_done',
+            agentId: reviewerId,
+            role,
+            message: `${role} 审查完成（预算降级，${fallback.issues.length} 个问题）`
+          })
+          return { ...fallback, method: 'rule-fallback' as const }
+        }
+
+        return runReviewer(
+          role,
+          taskId,
+          code,
+          language,
+          codeStats,
+          context,
+          onEvent,
+          scopeId,
+          signal,
+          guard
+        )
+      })
       agentLatency.reviewers[role] = Math.round(performance.now() - reviewerStartTimes[role])
       return { role, result }
     })
@@ -638,6 +762,36 @@ async function runReviewTask(
       agentResults: reviewerResults as unknown as Record<string, AgentResult>,
       reviewStatus
     }
+  }
+
+  // REQ-10：报告落库前对问题描述与建议做密钥脱敏，并记录注入检测结论
+  finalReport.issues = finalReport.issues.map(issue => ({
+    ...issue,
+    message: redactSecrets(issue.message),
+    suggestion: redactSecrets(issue.suggestion)
+  }))
+  // REQ-14：按 severityThreshold 过滤、按 maxIssues 截断
+  finalReport.issues = applyReviewConfig(finalReport.issues, reviewConfig)
+
+  if (injectionFindings.length > 0) {
+    finalReport.security = {
+      injectionSuspected: true,
+      findings: injectionFindings.map(item => ({
+        line: item.line,
+        pattern: item.pattern,
+        excerpt: redactSecrets(item.excerpt)
+      }))
+    }
+  }
+
+  // REQ-11：汇总 ReAct 治理统计，只有真正发生工具调用、熔断或预算降级时才写入报告
+  const governance = {
+    loopBreaks: Object.values(guards).reduce((sum, item) => sum + item.loopBreaks, 0),
+    toolCalls: Object.values(guards).reduce((sum, item) => sum + item.toolCalls, 0),
+    budgetExceeded
+  }
+  if (governance.loopBreaks > 0 || governance.toolCalls > 0 || governance.budgetExceeded) {
+    finalReport.governance = governance
   }
 
   const t4 = performance.now()

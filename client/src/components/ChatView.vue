@@ -2,19 +2,24 @@
 import { computed, ref, watch } from 'vue'
 import { useReviewStore } from '../stores/review'
 import { useChat } from '../composables/useChat'
-import axios from 'axios'
+import { http } from '../api/http'
 import CodeInput from './CodeInput.vue'
 import ChatMessage from './ChatMessage.vue'
 import ReviewReport from './ReviewReport.vue'
 import ProcessPanel from './ProcessPanel.vue'
 import ContextPanel from './ContextPanel.vue'
-import type { Issue } from '../types/index'
+import type { Issue, ReviewConfig } from '../types/index'
 
 const store = useReviewStore()
 const { startReview, retry, lastCode, lastLang } = useChat()
 
 function onRetry() {
   retry()
+}
+
+/** REQ-14：把代码输入区的审查设置透传给任务创建 */
+function onSubmit(code: string, language: string, reviewConfig?: ReviewConfig) {
+  startReview(code, language, undefined, undefined, reviewConfig)
 }
 
 const examples = [
@@ -123,8 +128,7 @@ async function cancelTask() {
   if (!store.taskId || cancelling.value) return
   cancelling.value = true
   try {
-    const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001/api'
-    await axios.post(`${API_BASE}/tasks/${store.taskId}/cancel`)
+    await http.post(`/tasks/${store.taskId}/cancel`)
     // 状态更新由 SSE task_cancelled 事件驱动；这里无需改本地状态
   } catch {
     // 任务可能恰好完成（409），交给 SSE/sync 收敛
@@ -272,7 +276,7 @@ const streamMessages = computed(() => store.messages.filter(m => m.type !== 'rep
         </div>
 
         <div class="wb-input">
-          <CodeInput :disabled="store.loading" @submit="startReview" />
+          <CodeInput :disabled="store.loading" @submit="onSubmit" />
         </div>
       </section>
 
@@ -291,7 +295,7 @@ const streamMessages = computed(() => store.messages.filter(m => m.type !== 'rep
 
     <!-- 空态下的输入区 -->
     <div v-if="!hasTask" class="input-area">
-      <CodeInput :disabled="store.loading" @submit="startReview" />
+      <CodeInput :disabled="store.loading" @submit="onSubmit" />
     </div>
   </div>
 </template>

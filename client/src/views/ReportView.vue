@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import axios from 'axios'
+import { http, isAxiosError } from '../api/http'
 import { ElMessage } from 'element-plus'
 import MarkdownIt from 'markdown-it'
 import type { FixResult, Issue, ReviewReport, Severity, TaskStatus } from '../types/index'
@@ -9,7 +9,6 @@ import CodeDiff from '../components/CodeDiff.vue'
 
 const route = useRoute()
 const router = useRouter()
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001/api'
 
 const taskId = computed(() => route.params.id as string)
 
@@ -46,7 +45,7 @@ async function fetchReport() {
   loading.value = true
   error.value = null
   try {
-    const res = await axios.get(`${API_BASE}/tasks/${taskId.value}`)
+    const res = await http.get(`/tasks/${taskId.value}`)
     const data = res.data as {
       task: TaskDetail
       report: { content: ReviewReport; score: number } | null
@@ -55,7 +54,7 @@ async function fetchReport() {
     reportData.value = data.report?.content || null
   } catch (err) {
     error.value =
-      axios.isAxiosError(err) && err.response?.data?.error
+      isAxiosError(err) && err.response?.data?.error
         ? err.response.data.error
         : '加载报告失败，请稍后重试。'
   } finally {
@@ -174,7 +173,7 @@ async function requestFix() {
   fixError.value = ''
   fixResult.value = null
   try {
-    const { data } = await axios.post(`${API_BASE}/tasks/${taskId.value}/fix`, {
+    const { data } = await http.post(`/tasks/${taskId.value}/fix`, {
       code: task.value.codeSnippet,
       language: task.value.language
     })
@@ -183,11 +182,35 @@ async function requestFix() {
     ElMessage.success(count === 0 ? '当前代码无需自动修复' : `已生成 ${count} 处修复建议`)
   } catch (err) {
     fixError.value =
-      axios.isAxiosError(err) && err.response?.data?.error
+      isAxiosError(err) && err.response?.data?.error
         ? err.response.data.error
         : '修复请求失败，请检查网络后重试。'
   } finally {
     isFixing.value = false
+  }
+}
+
+const exporting = ref(false)
+
+/** 导出报告（REQ-13）：走带鉴权的 http 实例，避免直接用链接绕过 API Key */
+async function exportReport(format: 'md' | 'sarif'): Promise<void> {
+  if (!taskId.value || exporting.value) return
+  exporting.value = true
+  try {
+    const res = await http.get(`/tasks/${taskId.value}/report.${format}`, { responseType: 'blob' })
+    const blobUrl = URL.createObjectURL(res.data as Blob)
+    const link = document.createElement('a')
+    link.href = blobUrl
+    link.download = `review-report-${taskId.value}.${format}`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(blobUrl)
+  } catch (err) {
+    const notFound = isAxiosError(err) && err.response?.status === 404
+    ElMessage.error(notFound ? '报告不存在，请等待审查完成' : '导出失败，请稍后重试')
+  } finally {
+    exporting.value = false
   }
 }
 
@@ -230,6 +253,12 @@ onMounted(() => {
           返回历史
         </el-button>
         <el-button size="small" @click="fetchReport">刷新报告</el-button>
+        <el-button size="small" :loading="exporting" @click="exportReport('md')">
+          导出 Markdown
+        </el-button>
+        <el-button size="small" :loading="exporting" @click="exportReport('sarif')">
+          导出 SARIF
+        </el-button>
       </div>
 
       <section class="report-hero">

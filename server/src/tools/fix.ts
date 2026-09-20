@@ -1,5 +1,6 @@
 import type { Tool } from '../agent/tool-registry'
 import { llmClient } from '../agent/llm-client'
+import { wrapUntrustedCode } from '../security/prompt-guard'
 
 interface FixChange {
   line: number
@@ -131,9 +132,7 @@ const applyFixes: Tool = {
               JSON.stringify(issuesSummary, null, 2),
               '',
               '## 原始代码',
-              '```',
-              code,
-              '```',
+              wrapUntrustedCode(code, language),
               '',
               '请根据上述 issues 修复代码，返回修复后的完整代码和修改摘要。'
             ].join('\n')

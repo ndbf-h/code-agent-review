@@ -1,12 +1,16 @@
 import { useReviewStore } from '../stores/review'
+import { API_BASE, authHeaders, getApiKey } from '../api/http'
 import type { AgentRole, ReviewReport, TaskStatus } from '../types/index'
 
 const MAX_RECONNECT_ATTEMPTS = 8
 const RECONNECT_BASE_DELAY_MS = 2_000
 const RECONNECT_MAX_DELAY_MS = 30_000
 
-function getApiBase(): string {
-  return import.meta.env.VITE_API_BASE || 'http://localhost:3001/api'
+/** EventSource 无法自定义请求头，密钥通过查询参数传递 */
+function withApiKey(url: string): string {
+  const key = getApiKey()
+  if (!key) return url
+  return `${url}${url.includes('?') ? '&' : '?'}api_key=${encodeURIComponent(key)}`
 }
 
 function normalizeReport(data: Record<string, unknown>): ReviewReport {
@@ -56,7 +60,7 @@ export function useSSE() {
   /** 重连耗尽后同步任务真实状态，避免在任务仍在后台运行时误报失败 */
   async function syncTaskState(taskId: string) {
     try {
-      const res = await fetch(`${getApiBase()}/tasks/${taskId}`)
+      const res = await fetch(`${API_BASE}/tasks/${taskId}`, { headers: authHeaders() })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const detail = (await res.json()) as {
         task?: { status?: string }
@@ -120,10 +124,8 @@ export function useSSE() {
       currentTaskId = taskId
       lastSeq = 0
     }
-    const url =
-      lastSeq > 0
-        ? `${getApiBase()}/tasks/${taskId}/stream?after=${lastSeq}`
-        : `${getApiBase()}/tasks/${taskId}/stream`
+    const streamBase = `${API_BASE}/tasks/${taskId}/stream`
+    const url = withApiKey(lastSeq > 0 ? `${streamBase}?after=${lastSeq}` : streamBase)
     eventSource = new EventSource(url)
 
     eventSource.onopen = () => {

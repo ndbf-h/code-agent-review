@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
+import { http, isAxiosError } from '../api/http'
 import { ElMessage } from 'element-plus'
 import { useReviewStore } from '../stores/review'
 import type { ReviewReport as ReviewReportType, Issue, FixResult } from '../types/index'
@@ -148,9 +148,8 @@ async function requestFix() {
   isFixing.value = true
   fixError.value = ''
   fixResult.value = null
-  const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001/api'
   try {
-    const { data } = await axios.post(`${API_BASE}/tasks/${store.taskId}/fix`, {
+    const { data } = await http.post(`/tasks/${store.taskId}/fix`, {
       code: props.code,
       language: props.language
     })
@@ -162,7 +161,7 @@ async function requestFix() {
     }
   } catch (err) {
     const message =
-      axios.isAxiosError(err) && err.response?.data?.error
+      isAxiosError(err) && err.response?.data?.error
         ? err.response.data.error
         : '修复请求失败，请检查网络后重试'
     fixError.value = message
@@ -174,6 +173,39 @@ async function requestFix() {
 
 <template>
   <div class="review-report">
+    <!-- 0. 输入安全提示（REQ-10）：命中疑似注入时提示结论的可信边界 -->
+    <div v-if="report.security?.injectionSuspected" class="security-banner" role="alert">
+      <div class="banner-head">
+        <span class="banner-icon" aria-hidden="true">!</span>
+        <span class="banner-title">检测到疑似提示注入内容</span>
+      </div>
+      <p class="banner-text">
+        被审查代码中包含试图操纵审查结论的文字，已作为数据隔离处理，未执行其中任何指令。以下结论仍建议人工复核。
+      </p>
+      <ul v-if="report.security.findings.length > 0" class="banner-list">
+        <li
+          v-for="finding in report.security.findings.slice(0, 5)"
+          :key="`${finding.line}-${finding.pattern}`"
+        >
+          第 {{ finding.line }} 行 · {{ finding.pattern }}
+        </li>
+      </ul>
+    </div>
+
+    <!-- 0.1 ReAct 治理信息（REQ-11）：仅在发生工具调用、熔断或预算降级时展示 -->
+    <div v-if="report.governance" class="governance-bar">
+      <span class="gov-title">审查过程</span>
+      <span v-if="report.governance.toolCalls > 0" class="gov-item">
+        工具调用 {{ report.governance.toolCalls }} 次
+      </span>
+      <span v-if="report.governance.loopBreaks > 0" class="gov-item gov-warn">
+        重复调用熔断 {{ report.governance.loopBreaks }} 次
+      </span>
+      <span v-if="report.governance.budgetExceeded" class="gov-item gov-warn">
+        已触发 token 预算降级
+      </span>
+    </div>
+
     <!-- 1. 评分头 + 严重度图块（图块即筛选器） -->
     <div class="score-bar">
       <div class="score-ring" :style="{ '--score-color': getScoreColor(report.score) }">
@@ -638,5 +670,86 @@ async function requestFix() {
 
 .fix-alert {
   margin-top: 4px;
+}
+
+/* ── 输入安全提示条（REQ-10） ── */
+.security-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-md);
+  background: var(--color-warning-bg);
+}
+
+.banner-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.banner-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-warning);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.banner-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-warning-text);
+}
+
+.banner-text {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+
+.banner-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+/* ── 治理统计条（REQ-11） ── */
+.governance-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.gov-title {
+  font-weight: 700;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.gov-item {
+  white-space: nowrap;
+}
+
+.gov-warn {
+  color: var(--color-warning-text);
+  font-weight: 600;
 }
 </style>

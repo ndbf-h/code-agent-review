@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { getApiKey, setApiKey, UNAUTHORIZED_EVENT } from './api/http'
 
 const route = useRoute()
 const THEME_KEY = 'codeagent-theme'
 const isDark = ref(false)
+const apiKeyConfigured = ref(false)
 
 function toggleTheme() {
   const dark = !isDark.value
@@ -13,8 +16,40 @@ function toggleTheme() {
   localStorage.setItem(THEME_KEY, dark ? 'dark' : 'light')
 }
 
+/** 侧边栏 API Key 入口：值存入 localStorage，由 http 客户端自动附带 */
+async function configureApiKey(): Promise<void> {
+  try {
+    const { value } = await ElMessageBox.prompt(
+      '保存后所有请求会自动携带 X-API-Key；留空表示服务端未启用鉴权。',
+      'API Key 设置',
+      {
+        inputValue: getApiKey(),
+        inputPlaceholder: '请输入 API Key',
+        confirmButtonText: '保存',
+        cancelButtonText: '取消'
+      }
+    )
+    setApiKey(value ?? '')
+    apiKeyConfigured.value = Boolean(getApiKey())
+    ElMessage.success(apiKeyConfigured.value ? 'API Key 已保存' : '已清空 API Key')
+  } catch {
+    // 用户取消，不做处理
+  }
+}
+
+/** 服务端返回 401 时提示用户配置密钥 */
+function handleUnauthorized(): void {
+  ElMessage.error('鉴权失败（401）：请在左下角配置 API Key')
+}
+
 onMounted(() => {
   isDark.value = document.documentElement.classList.contains('dark')
+  apiKeyConfigured.value = Boolean(getApiKey())
+  window.addEventListener(UNAUTHORIZED_EVENT, handleUnauthorized)
+})
+
+onUnmounted(() => {
+  window.removeEventListener(UNAUTHORIZED_EVENT, handleUnauthorized)
 })
 
 const navItems = [
@@ -102,6 +137,30 @@ const navItems = [
       </nav>
 
       <div class="side-footer">
+        <button
+          type="button"
+          class="theme-toggle"
+          :aria-label="apiKeyConfigured ? 'API Key 已配置' : '配置 API Key'"
+          :title="apiKeyConfigured ? 'API Key 已配置' : '配置 API Key'"
+          @click="configureApiKey"
+        >
+          <svg
+            width="17"
+            height="17"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 3l7 4v5c0 4.2-2.9 7.6-7 9-4.1-1.4-7-4.8-7-9V7z" />
+            <path d="M9.5 12.5l2 2 3.5-4" />
+          </svg>
+          <span class="side-label">{{ apiKeyConfigured ? 'API Key 已配置' : 'API Key 设置' }}</span>
+        </button>
+
         <button
           type="button"
           class="theme-toggle"

@@ -1,18 +1,17 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import axios from 'axios'
+import { computed, ref, watch } from 'vue'
+import { http, isAxiosError } from '../api/http'
 import { ElMessage } from 'element-plus'
 import { detectLanguage } from '../utils/detectLanguage'
+import type { ReviewConfig, ReviewDimension, Severity } from '../types/index'
 
 defineProps<{
   disabled: boolean
 }>()
 
 const emit = defineEmits<{
-  submit: [code: string, language: string]
+  submit: [code: string, language: string, reviewConfig?: ReviewConfig]
 }>()
-
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001/api'
 
 const code = ref('')
 const language = ref('typescript')
@@ -74,7 +73,7 @@ async function handleFetchUrl() {
   fetching.value = true
   urlError.value = ''
   try {
-    const response = await axios.post(`${API_BASE}/tasks/fetch-url`, { url })
+    const response = await http.post('/tasks/fetch-url', { url })
     const { content, lineCount } = response.data
 
     code.value = content
@@ -110,7 +109,7 @@ async function handleFetchUrl() {
       ElMessage.success(`已抓取 ${lineCount} 行 ${language.value} 代码，可编辑后提交审查`)
     }
   } catch (error) {
-    if (axios.isAxiosError(error) && error.response?.data?.error) {
+    if (isAxiosError(error) && error.response?.data?.error) {
       urlError.value = error.response.data.error
     } else {
       urlError.value = '网络请求失败，请检查链接'
@@ -136,9 +135,44 @@ function onKeydown(e: KeyboardEvent) {
   }
 }
 
+// ── 审查设置（REQ-14）：默认收起，未做修改时不随请求发送 ──
+const showSettings = ref(false)
+const instructions = ref('')
+const dimensions = ref<ReviewDimension[]>(['security', 'performance', 'style', 'logic'])
+const severityThreshold = ref<Severity | ''>('')
+
+const dimensionOptions: Array<{ label: string; value: ReviewDimension }> = [
+  { label: '安全', value: 'security' },
+  { label: '性能', value: 'performance' },
+  { label: '规范', value: 'style' },
+  { label: '逻辑', value: 'logic' }
+]
+
+const allDimensions = dimensionOptions.map(item => item.value)
+
+/** 当前设置是否偏离默认值 */
+const hasCustomSettings = computed(
+  () =>
+    instructions.value.trim().length > 0 ||
+    dimensions.value.length !== allDimensions.length ||
+    severityThreshold.value !== ''
+)
+
+/** 组装 reviewConfig；与默认一致时返回 undefined，避免无谓地产生独立缓存键 */
+function buildReviewConfig(): ReviewConfig | undefined {
+  if (!hasCustomSettings.value) return undefined
+  const config: ReviewConfig = {}
+  if (instructions.value.trim()) config.instructions = instructions.value.trim()
+  if (dimensions.value.length > 0 && dimensions.value.length !== allDimensions.length) {
+    config.dimensions = [...dimensions.value]
+  }
+  if (severityThreshold.value) config.severityThreshold = severityThreshold.value
+  return config
+}
+
 function handleSubmit() {
   if (!code.value.trim()) return
-  emit('submit', code.value, language.value)
+  emit('submit', code.value, language.value, buildReviewConfig())
 }
 </script>
 
@@ -207,6 +241,53 @@ function handleSubmit() {
       class="code-textarea"
       @keydown="onKeydown"
     />
+
+    <!-- 审查设置（REQ-14）：默认折叠 -->
+    <div class="settings-block">
+      <button
+        type="button"
+        class="settings-toggle"
+        :aria-expanded="showSettings"
+        @click="showSettings = !showSettings"
+      >
+        <span class="settings-caret" :class="{ open: showSettings }">▸</span>
+        审查设置
+        <span v-if="hasCustomSettings" class="settings-badge">已自定义</span>
+      </button>
+
+      <div v-if="showSettings" class="settings-body">
+        <label class="settings-label">自定义要求（最多 2000 字）</label>
+        <el-input
+          v-model="instructions"
+          type="textarea"
+          :rows="3"
+          maxlength="2000"
+          show-word-limit
+          :disabled="disabled"
+          placeholder="例如：重点关注并发安全与错误处理；忽略测试文件"
+        />
+
+        <label class="settings-label">审查维度（取消勾选即跳过该维度）</label>
+        <el-checkbox-group v-model="dimensions" :disabled="disabled">
+          <el-checkbox v-for="opt in dimensionOptions" :key="opt.value" :value="opt.value">
+            {{ opt.label }}
+          </el-checkbox>
+        </el-checkbox-group>
+
+        <label class="settings-label">只保留不低于该严重度的问题</label>
+        <el-select
+          v-model="severityThreshold"
+          size="small"
+          :disabled="disabled"
+          class="severity-select"
+        >
+          <el-option label="不过滤（默认）" value="" />
+          <el-option label="高危及以上" value="critical" />
+          <el-option label="警告及以上" value="warning" />
+          <el-option label="建议及以上（全部）" value="suggestion" />
+        </el-select>
+      </div>
+    </div>
 
     <div class="submit-row">
       <el-button
@@ -355,6 +436,71 @@ function handleSubmit() {
   display: flex;
   align-items: center;
   gap: 16px;
+}
+
+/* ── 审查设置（REQ-14） ── */
+.settings-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  padding: 4px 2px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.settings-toggle:hover {
+  color: var(--color-primary);
+}
+
+.settings-caret {
+  display: inline-block;
+  font-size: 11px;
+  transition: transform 0.15s ease;
+}
+
+.settings-caret.open {
+  transform: rotate(90deg);
+}
+
+.settings-badge {
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+}
+
+.settings-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.severity-select {
+  width: 220px;
 }
 
 .shortcut-hint {

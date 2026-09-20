@@ -23,7 +23,8 @@ async function main() {
 
   // RabbitMQ 会话：API 进程仅作生产者（发布任务），消费在独立 worker 进程
   const rabbit = new RabbitSession(config.rabbitmqUrl, 'api', config.taskRetry.delayMs)
-  setTaskProducer(createTaskProducer(rabbit))
+  const producer = createTaskProducer(rabbit)
+  setTaskProducer(producer)
 
   const app = createApp({
     config,
@@ -34,7 +35,9 @@ async function main() {
           .then(() => true),
       isRabbitConnected: () => rabbit.isConnected(),
       checkLlm: () => llmClient.healthCheck()
-    }
+    },
+    // REQ-15：Webhook 创建的任务需要入队，复用同一个生产者
+    publishTask: taskId => producer.publishTask(taskId)
   })
 
   await initDb()
