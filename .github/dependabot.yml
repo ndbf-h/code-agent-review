@@ -1,25 +1,30 @@
 version: 2
 updates:
+  # 依赖升级统一指向集成线 develop，避免 PR 直接落在发布线 master
   - package-ecosystem: npm
     directory: /
+    target-branch: develop
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
     labels: [dependencies]
   - package-ecosystem: npm
     directory: /server
+    target-branch: develop
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
     labels: [dependencies, server]
   - package-ecosystem: npm
     directory: /client
+    target-branch: develop
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
     labels: [dependencies, client]
   - package-ecosystem: github-actions
     directory: /
+    target-branch: develop
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
