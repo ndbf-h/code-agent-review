@@ -14,6 +14,28 @@ type MessageType = 'user_input' | 'agent_thought' | 'tool_call' | 'tool_result' 
 // ── Issue severity ──
 type Severity = 'critical' | 'warning' | 'suggestion'
 
+// ── 审查维度与请求级配置（REQ-14） ──
+type ReviewDimension = 'security' | 'performance' | 'style' | 'logic'
+
+interface ReviewConfig {
+  /** 追加给审查员的自定义要求（不超过 2000 字符） */
+  instructions?: string
+  /** 只运行指定维度，缺省表示四个维度全跑 */
+  dimensions?: ReviewDimension[]
+  /** 过滤掉严重度低于该值的问题 */
+  severityThreshold?: Severity
+  /** 问题数量上限：先按严重度、再按行号排序后截断 */
+  maxIssues?: number
+}
+
+/** 任务来源（REQ-15：GitHub Webhook 等；粘贴代码创建的任务为空） */
+interface TaskSource {
+  provider: 'github'
+  repo: string
+  prNumber: number
+  headSha?: string
+}
+
 interface Issue {
   line: number
   severity: Severity
@@ -78,6 +100,10 @@ interface Task {
   attemptCount?: number
   /** worker 执行心跳时间戳（ISO），用于崩溃检测 */
   heartbeatAt?: string | null
+  /** 请求级审查配置（REQ-14） */
+  reviewConfig?: ReviewConfig
+  /** 任务来源（REQ-15） */
+  source?: TaskSource
 }
 
 interface Agent {
@@ -123,6 +149,9 @@ export type {
   AgentStatus,
   MessageType,
   Severity,
+  ReviewDimension,
+  ReviewConfig,
+  TaskSource,
   Issue,
   AgentResult,
   ReportContent,

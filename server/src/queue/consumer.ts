@@ -24,7 +24,8 @@ import { llmClient } from '../agent/llm-client'
 import { appendTaskEvent } from '../services/eventService'
 import { withTaskTrace } from '../observability/tracing'
 import { createLogger } from '../logger'
-import type { ReportContent } from '../../../shared/types'
+import { commentReportToPullRequest } from '../integrations/github/webhook'
+import type { ReportContent, ReviewConfig } from '../../../shared/types'
 
 const logger = createLogger('worker')
 
@@ -34,9 +35,26 @@ const logger = createLogger('worker')
  */
 const PROMPT_VERSION = 'v1'
 
-function buildReviewCacheKey(code: string, language: string, model: string): string {
+/** 审查配置的稳定序列化：字段与数组顺序归一，保证相同配置产出相同键（REQ-14） */
+export function serializeReviewConfig(config: ReviewConfig): string {
+  const parts: string[] = []
+  if (config.instructions) parts.push(`instructions=${config.instructions}`)
+  if (config.dimensions?.length) parts.push(`dimensions=${[...config.dimensions].sort().join(',')}`)
+  if (config.severityThreshold) parts.push(`severityThreshold=${config.severityThreshold}`)
+  if (config.maxIssues !== undefined) parts.push(`maxIssues=${config.maxIssues}`)
+  return parts.join(';')
+}
+
+/** 缓存键（REQ-14）：审查配置不同即视为不同请求，避免复用不符合配置的历史报告 */
+export function buildReviewCacheKey(
+  code: string,
+  language: string,
+  model: string,
+  reviewConfig?: ReviewConfig
+): string {
+  const configPart = reviewConfig ? serializeReviewConfig(reviewConfig) : ''
   return createHash('sha256')
-    .update(`${code}\n--\n${language}\n--\n${model}\n--\n${PROMPT_VERSION}`)
+    .update(`${code}\n--\n${language}\n--\n${model}\n--\n${PROMPT_VERSION}\n--\n${configPart}`)
     .digest('hex')
 }
 
@@ -180,7 +198,12 @@ async function runClaimedTask(
   }
 
   // ── 语义缓存：同代码+语言+模型+prompt 版本直接复用报告（零 LLM 成本，秒级完成）──
-  const cacheKey = buildReviewCacheKey(task.codeSnippet, task.language, llmClient.modelName)
+  const cacheKey = buildReviewCacheKey(
+    task.codeSnippet,
+    task.language,
+    llmClient.modelName,
+    task.reviewConfig
+  )
   let cached: Awaited<ReturnType<typeof getReviewCache>> = null
   try {
     cached = await getReviewCache(cacheKey)
@@ -192,6 +215,8 @@ async function runClaimedTask(
     try {
       const reportContent = JSON.parse(cached.reportContent) as ReportContent
       await saveReport(taskId, reportContent, cached.score)
+      // REQ-15：来源为 GitHub PR 的任务，缓存命中同样回写评论
+      await commentReportToPullRequest(task, reportContent)
       await appendTaskEvent(taskId, {
         type: 'agent_thought',
         message: '命中审查结果缓存，直接复用历史报告（相同代码/语言/模型）'
@@ -267,7 +292,8 @@ async function runClaimedTask(
         task.language,
         event => sink.push(event),
         task.scopeId,
-        abortController.signal
+        abortController.signal,
+        task.reviewConfig
       )
       const results = Object.values(reportContent.agentResults || {})
       const score =
@@ -275,6 +301,8 @@ async function runClaimedTask(
           ? Math.round(results.reduce((sum, r) => sum + r.score, 0) / results.length)
           : 0
       await saveReport(taskId, reportContent, score)
+      // REQ-15：来源为 GitHub PR 的任务，完成后回写 Markdown 报告评论
+      await commentReportToPullRequest(task, reportContent)
       return reportContent
     })
     usage = traced.usage

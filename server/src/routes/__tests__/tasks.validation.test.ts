@@ -157,13 +157,36 @@ describe('POST /api/tasks', () => {
       .post('/api/tasks')
       .send({ code: 'const a = 1', language: 'javascript', title: '  demo  ' })
     expect(res.status).toBe(201)
+    // 第 5 个参数是 reviewConfig（REQ-14），本请求未提供
     expect(taskService.createTask).toHaveBeenCalledWith(
       'const a = 1',
       'javascript',
       'demo',
+      undefined,
       undefined
     )
     expect(publishTask).toHaveBeenCalledWith(TASK_ID)
+  })
+
+  it('携带 reviewConfig 时透传给任务服务并落库', async () => {
+    const reviewConfig = {
+      instructions: '重点关注并发安全',
+      dimensions: ['security', 'logic'],
+      severityThreshold: 'warning',
+      maxIssues: 5
+    }
+    const res = await request(app)
+      .post('/api/tasks')
+      .send({ code: 'const a = 1', language: 'javascript', reviewConfig })
+
+    expect(res.status).toBe(201)
+    expect(taskService.createTask).toHaveBeenCalledWith(
+      'const a = 1',
+      'javascript',
+      undefined,
+      undefined,
+      reviewConfig
+    )
   })
 })
 

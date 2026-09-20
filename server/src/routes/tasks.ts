@@ -112,9 +112,10 @@ tasksRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       // reviewConfig 目前仅校验形状（REQ-04），落库并生效由 REQ-14（批次 7）实现
-      const { code, language, title, scopeId, sourceVersionId } = req.body as CreateTaskBody
+      const { code, language, title, scopeId, sourceVersionId, reviewConfig } =
+        req.body as CreateTaskBody
 
-      const task = await createTask(code, language, title, scopeId)
+      const task = await createTask(code, language, title, scopeId, reviewConfig)
       await createAgentsForTask(task.id)
       if (sourceVersionId) await linkCodeVersionToReview(sourceVersionId, task.id)
 

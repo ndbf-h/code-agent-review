@@ -10,7 +10,14 @@ import { createLogger } from '../logger'
 import { createInsertMessageFn } from './persistence'
 import { withReviewerSpan } from '../observability/tracing'
 import { detectInjection, redactSecrets, wrapUntrustedCode } from '../security/prompt-guard'
-import type { AgentRole, ReportContent, AgentResult, Issue } from '../../../shared/types'
+import type {
+  AgentRole,
+  ReportContent,
+  AgentResult,
+  Issue,
+  ReviewConfig,
+  ReviewDimension
+} from '../../../shared/types'
 
 const logger = createLogger('orchestrator')
 const insertMessageFn = createInsertMessageFn()
@@ -372,13 +379,46 @@ function runRuleOnlyReview(
 // 主编排函数
 // ═══════════════════════════════════════════════════════════════
 
+const ALL_REVIEWER_ROLES: AgentRole[] = ['security', 'performance', 'style', 'logic']
+
+/** REQ-14：解析本次请求要运行的审查维度（未指定则四个维度全跑） */
+export function resolveReviewerRoles(reviewConfig?: ReviewConfig): AgentRole[] {
+  const requested = reviewConfig?.dimensions
+  if (!requested || requested.length === 0) return ALL_REVIEWER_ROLES
+  return ALL_REVIEWER_ROLES.filter(role => requested.includes(role as ReviewDimension))
+}
+
+/**
+ * REQ-14：按审查配置收敛最终问题列表。
+ * 先按 severityThreshold 过滤，再按「严重度 → 行号」排序后用 maxIssues 截断。
+ */
+export function applyReviewConfig(issues: Issue[], reviewConfig?: ReviewConfig): Issue[] {
+  if (!reviewConfig) return issues
+  const weight: Record<Issue['severity'], number> = { critical: 0, warning: 1, suggestion: 2 }
+  let result = issues
+
+  if (reviewConfig.severityThreshold) {
+    const threshold = weight[reviewConfig.severityThreshold] ?? 2
+    result = result.filter(issue => (weight[issue.severity] ?? 9) <= threshold)
+  }
+
+  if (reviewConfig.maxIssues && reviewConfig.maxIssues > 0) {
+    result = [...result]
+      .sort((a, b) => weight[a.severity] - weight[b.severity] || a.line - b.line)
+      .slice(0, reviewConfig.maxIssues)
+  }
+
+  return result
+}
+
 async function runReviewTask(
   taskId: string,
   code: string,
   language: string,
   onEvent: (event: ReviewEvent) => void,
   scopeId?: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  reviewConfig?: ReviewConfig
 ): Promise<ReportContent> {
   const t0 = performance.now()
   logger.info('审查任务开始', { taskId, language, codeLength: code.length })
@@ -531,7 +571,8 @@ async function runReviewTask(
   // ═══════════════════════════════════════════════════════
   // Step 3: Parallel reviewer execution (allSettled — 单个失败不影响其他)
   // ═══════════════════════════════════════════════════════
-  const reviewerRoles: AgentRole[] = ['security', 'performance', 'style', 'logic']
+  // REQ-14：只运行请求指定的维度；未指定则四个维度全跑
+  const reviewerRoles = resolveReviewerRoles(reviewConfig)
   const reviewerResults: Record<string, { issues: Issue[]; score: number }> = {}
   const reviewStatus: Record<string, 'success' | 'fallback' | 'failed'> = {}
 
@@ -547,13 +588,20 @@ async function runReviewTask(
   // 为每个 reviewer 生成针对性规划上下文
   function buildPlanningContext(role: string): string {
     const preScan = preScanResults[role]
-    if (!preScan) return planningNotes.substring(0, 500)
+    // REQ-14：自定义要求经定界包裹后注入，仅作为审查关注点，不改变角色与输出格式
+    const extraInstructions = reviewConfig?.instructions
+      ? ['用户补充要求：', wrapUntrustedCode(reviewConfig.instructions, 'text')].join('\n')
+      : ''
+    if (!preScan) {
+      return [planningNotes.substring(0, 500), extraInstructions].filter(Boolean).join('\n')
+    }
     const parts = [
       `Pre-scan found ${preScan.totalIssues} potential issues (${preScan.critical} critical, ${preScan.warning} warning)`,
       preScan.topIssues.length > 0
         ? `Top concerns: ${preScan.topIssues.map(i => `L${i.line}: ${i.message}`).join('; ')}`
         : '',
-      planningNotes ? `\nOrchestrator notes: ${planningNotes.substring(0, 300)}` : ''
+      planningNotes ? `\nOrchestrator notes: ${planningNotes.substring(0, 300)}` : '',
+      extraInstructions
     ]
     return parts.filter(Boolean).join('\n')
   }
@@ -722,6 +770,9 @@ async function runReviewTask(
     message: redactSecrets(issue.message),
     suggestion: redactSecrets(issue.suggestion)
   }))
+  // REQ-14：按 severityThreshold 过滤、按 maxIssues 截断
+  finalReport.issues = applyReviewConfig(finalReport.issues, reviewConfig)
+
   if (injectionFindings.length > 0) {
     finalReport.security = {
       injectionSuspected: true,

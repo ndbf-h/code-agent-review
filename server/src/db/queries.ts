@@ -36,7 +36,7 @@ export interface KnowledgeChunk {
 export async function insertTask(task: Task): Promise<void> {
   const db = getDb()
   await db.query(
-    'INSERT INTO tasks (id, title, code_snippet, language, scope_id, status, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+    'INSERT INTO tasks (id, title, code_snippet, language, scope_id, status, created_at, review_config, source) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
     [
       task.id,
       task.title,
@@ -44,9 +44,24 @@ export async function insertTask(task: Task): Promise<void> {
       task.language,
       task.scopeId,
       task.status,
-      task.createdAt
+      task.createdAt,
+      task.reviewConfig ? JSON.stringify(task.reviewConfig) : null,
+      task.source ? JSON.stringify(task.source) : null
     ]
   )
+}
+
+/** JSONB 列取值：pg 通常已解析为对象，字符串形态时兜底解析 */
+function parseJsonColumn<T>(value: unknown): T | undefined {
+  if (value === null || value === undefined) return undefined
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value) as T
+    } catch {
+      return undefined
+    }
+  }
+  return value as T
 }
 
 export async function updateTaskStatus(id: string, status: string): Promise<void> {
@@ -68,7 +83,9 @@ export async function getTask(id: string): Promise<Task | null> {
     status: row.status as Task['status'],
     createdAt: row.created_at as string,
     attemptCount: row.attempt_count !== undefined ? Number(row.attempt_count) : 0,
-    heartbeatAt: (row.heartbeat_at as string | null) ?? null
+    heartbeatAt: (row.heartbeat_at as string | null) ?? null,
+    reviewConfig: parseJsonColumn<Task['reviewConfig']>(row.review_config),
+    source: parseJsonColumn<Task['source']>(row.source)
   }
 }
 

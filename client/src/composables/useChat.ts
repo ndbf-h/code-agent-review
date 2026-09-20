@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import { http } from '../api/http'
 import { useReviewStore } from '../stores/review'
 import { useSSE } from './useSSE'
+import type { ReviewConfig } from '../types/index'
 
 export function useChat() {
   const store = useReviewStore()
@@ -16,7 +17,8 @@ export function useChat() {
     code: string,
     lang: string,
     requestedScopeId?: string,
-    sourceVersionId?: string
+    sourceVersionId?: string,
+    reviewConfig?: ReviewConfig
   ) {
     const reviewScopeId = requestedScopeId || store.scopeId
     store.reset()
@@ -32,12 +34,21 @@ export function useChat() {
     })
 
     try {
+      // REQ-14：仅在用户实际设置时才附带 reviewConfig，保持请求体整洁
+      const hasReviewConfig =
+        !!reviewConfig &&
+        (!!reviewConfig.instructions ||
+          !!reviewConfig.dimensions?.length ||
+          !!reviewConfig.severityThreshold ||
+          reviewConfig.maxIssues !== undefined)
+
       const response = await http.post('/tasks', {
         code,
         language: lang,
         title: `Review - ${new Date().toLocaleTimeString()}`,
         scopeId: reviewScopeId || undefined,
-        sourceVersionId
+        sourceVersionId,
+        reviewConfig: hasReviewConfig ? reviewConfig : undefined
       })
 
       const taskId = response.data.id

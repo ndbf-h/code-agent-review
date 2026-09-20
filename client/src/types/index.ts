@@ -3,6 +3,16 @@ type TaskStatus =
 type AgentRole = 'orchestrator' | 'security' | 'performance' | 'style' | 'logic'
 type Severity = 'critical' | 'warning' | 'suggestion'
 
+/** 审查维度与请求级配置（与服务端 shared/types.ts 保持一致，REQ-14） */
+type ReviewDimension = 'security' | 'performance' | 'style' | 'logic'
+
+interface ReviewConfig {
+  instructions?: string
+  dimensions?: ReviewDimension[]
+  severityThreshold?: Severity
+  maxIssues?: number
+}
+
 interface Issue {
   line: number
   severity: Severity
@@ -84,6 +94,8 @@ export type {
   TaskStatus,
   AgentRole,
   Severity,
+  ReviewDimension,
+  ReviewConfig,
   Issue,
   ReviewReport,
   ChatMessage,

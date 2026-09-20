@@ -8,13 +8,18 @@ import ChatMessage from './ChatMessage.vue'
 import ReviewReport from './ReviewReport.vue'
 import ProcessPanel from './ProcessPanel.vue'
 import ContextPanel from './ContextPanel.vue'
-import type { Issue } from '../types/index'
+import type { Issue, ReviewConfig } from '../types/index'
 
 const store = useReviewStore()
 const { startReview, retry, lastCode, lastLang } = useChat()
 
 function onRetry() {
   retry()
+}
+
+/** REQ-14：把代码输入区的审查设置透传给任务创建 */
+function onSubmit(code: string, language: string, reviewConfig?: ReviewConfig) {
+  startReview(code, language, undefined, undefined, reviewConfig)
 }
 
 const examples = [
@@ -271,7 +276,7 @@ const streamMessages = computed(() => store.messages.filter(m => m.type !== 'rep
         </div>
 
         <div class="wb-input">
-          <CodeInput :disabled="store.loading" @submit="startReview" />
+          <CodeInput :disabled="store.loading" @submit="onSubmit" />
         </div>
       </section>
 
@@ -290,7 +295,7 @@ const streamMessages = computed(() => store.messages.filter(m => m.type !== 'rep
 
     <!-- 空态下的输入区 -->
     <div v-if="!hasTask" class="input-area">
-      <CodeInput :disabled="store.loading" @submit="startReview" />
+      <CodeInput :disabled="store.loading" @submit="onSubmit" />
     </div>
   </div>
 </template>

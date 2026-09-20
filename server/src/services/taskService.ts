@@ -1,6 +1,14 @@
 import { v4 as uuidv4 } from 'uuid'
 import { getConfig } from '../config'
-import type { Task, Agent, Message, ReportContent, AgentRole } from '../../../shared/types'
+import type {
+  Task,
+  Agent,
+  Message,
+  ReportContent,
+  AgentRole,
+  ReviewConfig,
+  TaskSource
+} from '../../../shared/types'
 import {
   insertTask,
   updateTaskStatus,
@@ -16,7 +24,9 @@ async function createTask(
   code: string,
   language: string,
   title?: string,
-  scopeId?: string
+  scopeId?: string,
+  reviewConfig?: ReviewConfig,
+  source?: TaskSource
 ): Promise<Task> {
   const id = uuidv4()
   const task: Task = {
@@ -28,6 +38,9 @@ async function createTask(
     status: 'pending',
     createdAt: new Date().toISOString()
   }
+  // 仅在有值时写入，避免把 undefined 变成 JSON 里的 null 字段
+  if (reviewConfig) task.reviewConfig = reviewConfig
+  if (source) task.source = source
 
   await insertTask(task)
   return task
