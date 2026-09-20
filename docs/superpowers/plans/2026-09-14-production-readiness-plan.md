@@ -114,6 +114,8 @@
 - 后续可继续的方向（PRD 第六章「本轮不做」）：E2E（Playwright）、集中式限流、跨实例指标聚合、多用户与配额、GitLab / Bitbucket 接入与 PR 行内评论。
 - 推送状态：批次 5 到 8 的提交已推送到 `develop`（`06b9b73`），并合并进 `master`（`047c00b`），CI 在 master 推送时自动触发。
 - 2026-09-20 追加：按新流程完成遗留依赖升级（`jsdom` 30.1、`markdown-it` 15.0.2、`@types/node` 26.6、`@vitejs/plugin-vue` 6.0.9、`element-plus` 2.14.6、`pino` 10.3.1、`vitest` 5.0.1、`@types/supertest` 7.2.1、`concurrently` 10.0.5），并把 Dependabot 的 `target-branch` 统一改为 `develop`；再合并进 `master`（`578cf62`）并打标签 `v1.1.0`，CI（run #42）通过。
+- 2026-09-20 追加：遗留依赖升级经 `develop` 合并进 `master`（`9972466`）后打标签 `v1.1.1`，CI（run #47）通过。该标签首次误打在 `5ca5998`（develop 侧的提交）上，已重建为指向 master 的合并提交，与 `v1.1.0` 的惯例保持一致。
+- 2026-09-20 追加：清理远端遗留分支 `trial/majors`（其依赖版本已全部被 `develop` 覆盖，无独有改动）；`git fetch --prune` 同时移除了随 PR 关闭由 Dependabot 自动删除的 `origin/dependabot/*` 跟踪引用。远端常驻分支现为 `master` 与 `develop`。
 - 尚未处理的轻微建议：tasks.ts 处理器内直接 `res.json` 的 502 / 500 响应体不含 requestId；`createTaskBodySchema()` 每请求重建 schema（可按 maxCodeChars 缓存）；`vue/multi-word-component-names` 规则关闭需在 CHANGELOG 说明（批次 8）。
 - 本机验证限制：Docker 守护进程未运行，Dockerfile 只做了静态检查，镜像构建交由 CI 的 docker job 验证。本轮 CI 触发范围已扩展到 `develop`，集成线上的镜像构建同样会被流水线验证。
 - 仓库对应关系：本文件第 13 行提到的 `D:\Users\zhiquan.huang\code review` 与本机 `d:/Code/code-agent-review` 指向同一远端仓库 `ndbf-h/code-agent-review`（提交作者一致、远端仅此一个），两份工作副本通过 `develop` 分支同步即可，无需另建分支做设备隔离。
