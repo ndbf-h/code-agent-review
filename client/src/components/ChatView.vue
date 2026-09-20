@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useReviewStore } from '../stores/review'
 import { useChat } from '../composables/useChat'
-import axios from 'axios'
+import { http } from '../api/http'
 import CodeInput from './CodeInput.vue'
 import ChatMessage from './ChatMessage.vue'
 import ReviewReport from './ReviewReport.vue'
@@ -123,8 +123,7 @@ async function cancelTask() {
   if (!store.taskId || cancelling.value) return
   cancelling.value = true
   try {
-    const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001/api'
-    await axios.post(`${API_BASE}/tasks/${store.taskId}/cancel`)
+    await http.post(`/tasks/${store.taskId}/cancel`)
     // 状态更新由 SSE task_cancelled 事件驱动；这里无需改本地状态
   } catch {
     // 任务可能恰好完成（409），交给 SSE/sync 收敛

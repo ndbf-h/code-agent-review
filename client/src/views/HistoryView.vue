@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
+import { http, isAxiosError } from '../api/http'
 import type { TaskItem, TaskStatus } from '../types/index'
 
 const router = useRouter()
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001/api'
 
 const tasks = ref<TaskItem[]>([])
 const total = ref(0)
@@ -36,7 +35,7 @@ async function fetchTasks(isLoadMore = false) {
 
   try {
     const offset = (page.value - 1) * pageSize
-    const res = await axios.get(`${API_BASE}/tasks`, {
+    const res = await http.get('/tasks', {
       params: {
         limit: pageSize,
         offset,
@@ -49,7 +48,7 @@ async function fetchTasks(isLoadMore = false) {
     total.value = data.total
   } catch (err) {
     error.value =
-      axios.isAxiosError(err) && err.response?.data?.error
+      isAxiosError(err) && err.response?.data?.error
         ? err.response.data.error
         : '加载历史记录失败，请检查后端服务是否正常运行。'
   } finally {

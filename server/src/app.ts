@@ -4,8 +4,10 @@ import helmet from 'helmet'
 import type { AppConfig } from './config'
 import { AppError } from './errors'
 import { createRateLimiter } from './middleware/rateLimiter'
+import { createApiKeyAuth } from './middleware/apiKeyAuth'
 import { tasksRouter, metricsRouter } from './routes/tasks'
 import { createHealthRouter, type HealthDeps } from './routes/health'
+import { createDocsRouter } from './routes/docs'
 import { mountMcpEndpoint } from './mcp/server'
 import { requestContextMiddleware } from './middleware/requestContext'
 import { accessLogMiddleware } from './middleware/accessLog'
@@ -82,6 +84,14 @@ export function createApp(deps: AppDeps): Express {
   const globalSpec = deps.rateLimits?.global ?? { maxRequests: 100, windowMs: 60_000 }
   app.use(createRateLimiter(globalSpec.maxRequests, globalSpec.windowMs))
 
+  // REQ-12：API Key 鉴权（API_KEYS 为空时直通），挂在 MCP 之前使 /mcp 同样受保护
+  app.use(
+    createApiKeyAuth({
+      apiKeys: config.auth.apiKeys,
+      warnIfDisabled: config.env === 'production'
+    })
+  )
+
   // MCP 端点自管 body 解析，必须在全局 express.json() 之前挂载
   if (deps.mountMcp !== false) mountMcpEndpoint(app)
 
@@ -91,6 +101,8 @@ export function createApp(deps: AppDeps): Express {
   app.use('/api/tasks', createRateLimiter(reviewSpec.maxRequests, reviewSpec.windowMs), tasksRouter)
   app.use('/api/metrics', metricsRouter)
   app.use('/api/health', createHealthRouter(deps.health))
+  // REQ-16：接口文档（/api/openapi.json、/api/docs），无需鉴权
+  app.use('/api', createDocsRouter())
 
   app.use((_req: Request, res: Response) => {
     res.status(404).json({ error: '接口不存在', code: 'NOT_FOUND' })

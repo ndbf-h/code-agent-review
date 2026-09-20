@@ -36,6 +36,8 @@ import { v4 as uuidv4 } from 'uuid'
 import { getConfig } from '../config'
 import { createLogger } from '../logger'
 import { validate, getValidated } from '../validation/middleware'
+import { renderReportMarkdown } from '../export/markdown'
+import { renderSarif } from '../export/sarif'
 import {
   taskIdParamsSchema,
   createTaskBodySchema,
@@ -193,6 +195,44 @@ tasksRouter.get(
         throw new TaskError('Task not found', 'TASK_NOT_FOUND', 404)
       }
       res.json(detail)
+    } catch (error) {
+      next(error)
+    }
+  }
+)
+
+// GET /api/tasks/:id/report.md — 导出 Markdown 审查报告（REQ-13）
+tasksRouter.get(
+  '/:id/report.md',
+  withTaskId,
+  async (req: TaskIdRequest, res: Response, next: NextFunction) => {
+    try {
+      const detail = await getTaskDetail(req.params.id)
+      if (!detail.task || !detail.report) {
+        throw new TaskError('审查报告不存在', 'REPORT_NOT_FOUND', 404)
+      }
+      res.setHeader('Content-Type', 'text/markdown; charset=utf-8')
+      res.setHeader('Content-Disposition', `attachment; filename="report-${detail.task.id}.md"`)
+      res.send(renderReportMarkdown(detail.task, detail.report.content))
+    } catch (error) {
+      next(error)
+    }
+  }
+)
+
+// GET /api/tasks/:id/report.sarif — 导出 SARIF 2.1.0（REQ-13）
+tasksRouter.get(
+  '/:id/report.sarif',
+  withTaskId,
+  async (req: TaskIdRequest, res: Response, next: NextFunction) => {
+    try {
+      const detail = await getTaskDetail(req.params.id)
+      if (!detail.task || !detail.report) {
+        throw new TaskError('审查报告不存在', 'REPORT_NOT_FOUND', 404)
+      }
+      res.setHeader('Content-Type', 'application/sarif+json')
+      res.setHeader('Content-Disposition', `attachment; filename="report-${detail.task.id}.sarif"`)
+      res.send(JSON.stringify(renderSarif(detail.task, detail.report.content), null, 2))
     } catch (error) {
       next(error)
     }

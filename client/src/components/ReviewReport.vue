@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
+import { http, isAxiosError } from '../api/http'
 import { ElMessage } from 'element-plus'
 import { useReviewStore } from '../stores/review'
 import type { ReviewReport as ReviewReportType, Issue, FixResult } from '../types/index'
@@ -148,9 +148,8 @@ async function requestFix() {
   isFixing.value = true
   fixError.value = ''
   fixResult.value = null
-  const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001/api'
   try {
-    const { data } = await axios.post(`${API_BASE}/tasks/${store.taskId}/fix`, {
+    const { data } = await http.post(`/tasks/${store.taskId}/fix`, {
       code: props.code,
       language: props.language
     })
@@ -162,7 +161,7 @@ async function requestFix() {
     }
   } catch (err) {
     const message =
-      axios.isAxiosError(err) && err.response?.data?.error
+      isAxiosError(err) && err.response?.data?.error
         ? err.response.data.error
         : '修复请求失败，请检查网络后重试'
     fixError.value = message

@@ -1,9 +1,7 @@
 import { ref } from 'vue'
-import axios from 'axios'
+import { http } from '../api/http'
 import { useReviewStore } from '../stores/review'
 import { useSSE } from './useSSE'
-
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001/api'
 
 export function useChat() {
   const store = useReviewStore()
@@ -34,7 +32,7 @@ export function useChat() {
     })
 
     try {
-      const response = await axios.post(`${API_BASE}/tasks`, {
+      const response = await http.post('/tasks', {
         code,
         language: lang,
         title: `Review - ${new Date().toLocaleTimeString()}`,

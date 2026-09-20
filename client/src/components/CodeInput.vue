@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import axios from 'axios'
+import { http, isAxiosError } from '../api/http'
 import { ElMessage } from 'element-plus'
 import { detectLanguage } from '../utils/detectLanguage'
 
@@ -11,8 +11,6 @@ defineProps<{
 const emit = defineEmits<{
   submit: [code: string, language: string]
 }>()
-
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001/api'
 
 const code = ref('')
 const language = ref('typescript')
@@ -74,7 +72,7 @@ async function handleFetchUrl() {
   fetching.value = true
   urlError.value = ''
   try {
-    const response = await axios.post(`${API_BASE}/tasks/fetch-url`, { url })
+    const response = await http.post('/tasks/fetch-url', { url })
     const { content, lineCount } = response.data
 
     code.value = content
@@ -110,7 +108,7 @@ async function handleFetchUrl() {
       ElMessage.success(`已抓取 ${lineCount} 行 ${language.value} 代码，可编辑后提交审查`)
     }
   } catch (error) {
-    if (axios.isAxiosError(error) && error.response?.data?.error) {
+    if (isAxiosError(error) && error.response?.data?.error) {
       urlError.value = error.response.data.error
     } else {
       urlError.value = '网络请求失败，请检查链接'
