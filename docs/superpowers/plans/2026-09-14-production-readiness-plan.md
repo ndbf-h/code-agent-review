@@ -112,7 +112,7 @@
 
 - 批次 1 到 8 全部完成，REQ-01 到 REQ-17 共 17 项需求均已实施并自测通过；server 单测 31 文件 / 235 用例，client 单测 2 文件 / 7 用例，lint（0 error）、format、typecheck、build 全部通过。
 - 后续可继续的方向（PRD 第六章「本轮不做」）：E2E（Playwright）、集中式限流、跨实例指标聚合、多用户与配额、GitLab / Bitbucket 接入与 PR 行内评论。
-- 待办：本机网络暂时不可达 GitHub，批次 6 之后的本地提交尚未推送，恢复后执行 `git push origin develop`。
+- 推送状态：批次 5 到 8 的提交已推送到 `develop`（`06b9b73`），并合并进 `master`（`047c00b`），CI 在 master 推送时自动触发。
 - 尚未处理的轻微建议：tasks.ts 处理器内直接 `res.json` 的 502 / 500 响应体不含 requestId；`createTaskBodySchema()` 每请求重建 schema（可按 maxCodeChars 缓存）；`vue/multi-word-component-names` 规则关闭需在 CHANGELOG 说明（批次 8）。
 - 本机验证限制：Docker 守护进程未运行，Dockerfile 只做了静态检查，镜像构建交由 CI 的 docker job 验证。本轮 CI 触发范围已扩展到 `develop`，集成线上的镜像构建同样会被流水线验证。
 - 仓库对应关系：本文件第 13 行提到的 `D:\Users\zhiquan.huang\code review` 与本机 `d:/Code/code-agent-review` 指向同一远端仓库 `ndbf-h/code-agent-review`（提交作者一致、远端仅此一个），两份工作副本通过 `develop` 分支同步即可，无需另建分支做设备隔离。
