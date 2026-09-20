@@ -1,5 +1,7 @@
 # Code Agent Review
 
+[![CI](https://github.com/ndbf-h/code-agent-review/actions/workflows/ci.yml/badge.svg)](https://github.com/ndbf-h/code-agent-review/actions/workflows/ci.yml)
+
 一个基于多 Agent 协作的 AI 代码审查平台。用户可以粘贴代码或从 URL 拉取代码，系统会创建审查任务，通过编排 Agent 分发给安全、性能、风格、逻辑等多个 Reviewer，并用 SSE 实时展示 Agent 思考、工具调用、审查进度和最终报告。
 
 这个项目的目标不是做一个简单的 LLM 聊天壳，而是模拟真实 Code Review 流程：先做规则预扫描，再由编排器规划审查重点，多个 Reviewer 并行分析，最后聚合问题、评分和修复建议。
@@ -43,13 +45,16 @@ docker compose up --build
 | 模块 | 技术 |
 | --- | --- |
 | 前端 | Vue 3, Vite, TypeScript, Pinia, Vue Router, Element Plus, Axios |
-| 后端 | Node.js, Express, TypeScript, pg |
+| 后端 | Node.js, Express 5, TypeScript, pg |
 | Agent | 自研 ReAct Loop, Tool Registry, 多角色 Prompt, LLM Structured Output |
 | 消息队列 | RabbitMQ 3.13 (amqplib), durable 队列 / publisher confirm / prefetch 并发 / TTL 延迟重试 / DLQ |
 | 数据库 | PostgreSQL（含 LISTEN/NOTIFY 实时事件扇出） |
 | 通信 | REST API, Server-Sent Events（事件回放 + 续传） |
-| 测试 | Vitest, Vue Test Utils, jsdom |
-| 工程化 | ESLint/TypeScript Build, 环境变量配置, 并发任务限制 |
+| 校验与配置 | zod（环境变量与入参 schema）、helmet、express-rate-limit |
+| 日志与追踪 | pino（JSON / pretty）、请求 ID (AsyncLocalStorage)、Langfuse（可选） |
+| 测试 | Vitest, Vue Test Utils, jsdom, supertest |
+| 工程化 | ESLint flat config, Prettier, GitHub Actions CI, Dependabot, 版本化数据库迁移, 多阶段非 root 镜像 |
+| 接口文档 | OpenAPI 3.1（zod 生成）+ Swagger UI |
 
 ## 系统架构
 
@@ -283,15 +288,89 @@ npm test
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| `POST` | `/api/tasks` | 创建任务并发布到 RabbitMQ 队列（队列不可用时返回 502） |
-| `GET` | `/api/tasks` | 获取任务列表（支持 `status` 过滤） |
+| `POST` | `/api/tasks` | 创建任务并发布到 RabbitMQ 队列（队列不可用时返回 502；支持 `reviewConfig`） |
+| `GET` | `/api/tasks` | 获取任务列表（支持 `status` / `limit` / `offset`） |
 | `GET` | `/api/tasks/:id` | 获取任务详情、Agent、消息和报告 |
+| `POST` | `/api/tasks/:id/cancel` | 取消排队中或执行中的任务 |
 | `GET` | `/api/tasks/:id/stream` | 订阅事件流：状态快照 + 按 `Last-Event-Id`（或 `?after=`）回放 + 实时推送 |
+| `POST` | `/api/tasks/:id/chat/stream` | 就已完成报告与助手对话（SSE） |
+| `POST` | `/api/tasks/:id/versions` | 保存一份助手生成的代码版本 |
+| `POST` | `/api/tasks/:id/guidelines` | 上传任务或项目级编码规范 |
 | `POST` | `/api/tasks/:id/fix` | 基于报告问题生成修复后的代码 |
-| `POST` | `/api/tasks/fetch-url` | 从 URL 抓取代码文本 |
+| `GET` | `/api/tasks/:id/report.md` | 导出 Markdown 报告 |
+| `GET` | `/api/tasks/:id/report.sarif` | 导出 SARIF 2.1.0 报告 |
+| `POST` | `/api/tasks/fetch-url` | 从 URL 抓取代码文本（含 SSRF 防护） |
+| `POST` | `/api/webhooks/github` | GitHub Webhook（HMAC 校验，未配置密钥返回 404） |
 | `GET` | `/api/metrics` | 获取 Token、请求数和 Agent 耗时指标 |
 | `POST` | `/api/metrics/reset` | 重置指标计数器 |
-| `GET` | `/api/health` | 服务健康检查 |
+| `GET` | `/api/health` | 服务健康检查（`?deep=1` 时额外探测 LLM） |
+| `GET` | `/api/health/live` | 存活探针 |
+| `GET` | `/api/health/ready` | 就绪探针（PostgreSQL + RabbitMQ） |
+| `GET` | `/api/openapi.json` | OpenAPI 3.1 文档 |
+| `GET` | `/api/docs` | Swagger UI 页面 |
+
+### 鉴权
+
+配置 `API_KEYS`（逗号分隔）后，除 `/api/health*`、`/api/openapi.json`、`/api/docs`、`/api/webhooks/*` 外的接口都需要携带密钥：
+
+```bash
+curl -H "X-API-Key: <key>" http://localhost:3001/api/tasks
+# 等价写法
+curl -H "Authorization: Bearer <key>" http://localhost:3001/api/tasks
+```
+
+SSE 的 `GET /api/tasks/:id/stream` 与 `POST /api/tasks/:id/chat/stream` 额外接受 `?api_key=<key>`（`EventSource` 无法自定义请求头），`/mcp` 同样受保护。前端侧边栏底部的「API Key 设置」会把密钥存入 localStorage 并自动附带；服务端返回 401 时会提示配置。
+
+`API_KEYS` 为空表示不鉴权（保持向后兼容）；`NODE_ENV=production` 且未配置时启动会打印 WARN。
+
+### 请求级审查配置
+
+`POST /api/tasks` 支持可选的 `reviewConfig`：
+
+```json
+{
+  "code": "…",
+  "language": "typescript",
+  "reviewConfig": {
+    "instructions": "重点关注并发安全与错误处理；忽略测试文件",
+    "dimensions": ["security", "logic"],
+    "severityThreshold": "warning",
+    "maxIssues": 20
+  }
+}
+```
+
+- `instructions`：追加给审查员的自定义要求（不超过 2000 字，经定界包裹后注入，不会改变角色与输出格式）
+- `dimensions`：只运行指定维度（`security` / `performance` / `style` / `logic`），缺省四个维度全跑
+- `severityThreshold`：过滤严重度低于该值的问题
+- `maxIssues`：按「严重度 → 行号」排序后的数量上限
+
+配置随任务落库，并参与语义缓存键计算——不同配置不会复用同一份报告。前端代码输入区的「审查设置」提供可视化配置。
+
+### 报告导出
+
+| 端点 | 内容 |
+| --- | --- |
+| `GET /api/tasks/:id/report.md` | Markdown 报告：评分、严重度统计、最终问题清单、各维度发现、审查状态与治理信息 |
+| `GET /api/tasks/:id/report.sarif` | SARIF 2.1.0，可接入 GitHub code scanning、reviewdog 等工具 |
+
+报告不存在返回 404；前端报告页提供「导出 Markdown / 导出 SARIF」按钮。
+
+### GitHub Webhook
+
+配置 `GITHUB_WEBHOOK_SECRET` 与 `GITHUB_TOKEN` 后，在仓库 Settings → Webhooks 中新增指向 `POST /api/webhooks/github` 的 Webhook（Content type 选 `application/json`，事件选 Pull requests）：
+
+- 使用 `X-Hub-Signature-256` 做 HMAC SHA-256 校验，签名不合法返回 401
+- 仅处理 `pull_request` 事件的 `opened` / `synchronize` / `reopened` 动作，其余返回 204
+- 拉取变更文件（按扩展名白名单过滤、总量受 `MAX_CODE_CHARS` 限制）作为一个任务提交审查，任务来源记录为 `{ provider: 'github', repo, prNumber, headSha }`
+- 任务完成后把 Markdown 报告回写为 PR 评论（回写失败只记日志，不影响任务状态）
+
+未配置 `GITHUB_WEBHOOK_SECRET` 时该端点返回 404（视为未启用）。
+
+### 接口文档
+
+- `GET /api/docs`：Swagger UI 页面
+- `GET /api/openapi.json`：OpenAPI 3.1 文档，请求体 schema 直接由 zod 校验规则生成，避免文档与实现漂移
 
 ## SSE 事件
 
@@ -487,16 +566,16 @@ LOG_LEVEL=DEBUG
 
 ## 生产化改进方向
 
-这个项目已经具备比较完整的全栈闭环，但如果要进一步接近生产级，可以继续补齐：
+已完成的生产化改造见 `CHANGELOG.md`；下一步可继续补齐：
 
-- **跨实例指标聚合**：Token 用量 / Agent 耗时目前是进程内计数器，可迁移到数据库或 Prometheus 指标。
-- **集中式限流**：限流器目前按进程计数，多副本部署需迁移到 Redis 等集中存储。
-- **部署方案**：当前已提供 Docker Compose 本地部署，后续可补充镜像发布、反向代理、HTTPS 和 CI/CD 自动部署。
-- **权限系统**：增加登录、用户隔离、API Key 管理和审查记录权限控制。
-- **更完整的 CI**：在 GitHub Actions 中运行前端构建、后端构建、单元测试和类型检查。
+- **跨实例指标聚合**：Token 用量 / Agent 耗时仍是进程内计数器，可迁移到数据库或 Prometheus 指标。
+- **集中式限流**：限流器按进程计数，多副本部署需迁移到 Redis 等集中存储。
+- **部署方案**：已提供 Docker Compose 与 CI 镜像构建，后续可补充镜像发布、反向代理与 HTTPS 示例。
+- **权限系统**：API Key 已解决「谁能调用」，仍需登录、用户隔离与审查记录权限控制。
 - **E2E 测试**：使用 Playwright 覆盖创建任务、流式审查、查看报告和历史记录。
-- **报告导出**：支持 Markdown、PDF 或 HTML 格式的审查报告导出。
-- **代码仓库接入**：支持 GitHub/GitLab Pull Request 级别审查，而不只是粘贴代码。
+- **报告导出扩展**：Markdown 与 SARIF 已支持，可再补 PDF / HTML。
+- **更多代码平台接入**：GitHub Webhook 已打通，可扩展 GitLab / Bitbucket、PR 行内评论与增量审查。
+- **多用户与配额**：`tasks.user_id` 隔离、按用户限流与成本配额。
 
 ## 面试讲解重点
 
@@ -514,3 +593,7 @@ LOG_LEVEL=DEBUG
 项目适合作为“具备生产化思考的 AI 代码审查平台”展示。它已经覆盖前端交互、后端 API、数据库持久化、实时通信、LLM 集成、Agent 编排、规则引擎、测试和安全边界等能力。
 
 对于实习生求职来说，这个项目的优势在于：不只是完成页面和接口，而是能讲清楚复杂异步任务、AI 工程落地、系统可靠性和安全边界。
+
+## 许可证
+
+`LICENSE` 由仓库所有者选定许可证类型后补充，在此之前保留所有权利。参与贡献前请先阅读 [贡献规范](CONTRIBUTING.md)，安全问题请按 [安全策略](SECURITY.md) 的渠道私下报告。

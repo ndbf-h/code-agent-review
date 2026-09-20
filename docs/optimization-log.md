@@ -12,11 +12,14 @@
 | 2 | REQ-03 zod 配置校验、REQ-06 helmet / CORS 白名单 / body 限制、REQ-07 live / ready 探针 | 完成，验收通过 |
 | 3 | REQ-04 路由入参 zod 校验、REQ-05 pino 结构化日志 + 请求 ID + 访问日志 | 完成，验收通过 |
 | 4 | REQ-09 版本化迁移（advisory lock + schema_migrations）、REQ-08 非 root 容器 + nginx 托管前端 | 完成，验收通过 |
-| 5 到 8 | LLM 治理、API Key / 导出 / OpenAPI、请求级配置 / GitHub Webhook、文档收口 | 待开始 |
+| 5 | REQ-10 提示注入防御与输出脱敏、REQ-11 ReAct 熔断 / 工具调用上限 / token 预算 | 完成 |
+| 6 | REQ-12 API Key 鉴权与前端统一 HTTP 客户端、REQ-13 Markdown / SARIF 导出、REQ-16 OpenAPI 文档 | 完成 |
+| 7 | REQ-14 请求级审查配置、REQ-15 GitHub Webhook 最小闭环 | 完成 |
+| 8 | REQ-17 文档收口（SECURITY / CONTRIBUTING / CHANGELOG / README） | 完成 |
 
-下次继续：
-1. 从批次 5（REQ-10 提示注入防御、REQ-11 ReAct 治理）开始按计划文件逐批实施，每批次开发完成后由验收角色审查、问题回流修复；
-2. 批次 8 收口时补 README（新能力、配置项、探针、CI 徽章）、SECURITY.md、CONTRIBUTING.md、CHANGELOG.md，并在本文件登记量化结果。
+批次 1 到 8 全部完成，REQ-01 到 REQ-17 共 17 项需求均已实施，每批次的验收命令都在本地跑通，明细见计划文件的进度台账。
+
+后续可继续的方向（PRD 第六章「本轮不做」与 README 改进方向）：跨实例指标聚合、集中式限流、E2E（Playwright）、多用户与配额、GitLab / Bitbucket 接入与 PR 行内评论。
 
 ## 2026-09-14 · 生产级打磨批次 1 到 4
 
@@ -201,4 +204,32 @@
 | code-snippet | 75% | **100%** |
 
 **简历句式（真实数据）**："混合检索（BM25+多语言向量+RRF+重排）使 Recall@5 从 75% 提升至 100%，中文查询召回从 0% 提升至 100%，MRR 0.73→0.93"。
+
+## 2026-09-20 · 生产级打磨批次 5 到 8（REQ-10 到 REQ-17）✅
+
+**做了什么**
+
+- **LLM 治理（REQ-10、REQ-11）**：新增 `security/prompt-guard.ts`（9 条注入检测规则 + 随机 nonce 定界包裹 + 五类凭据脱敏），五个角色 prompt 统一追加隔离约束，orchestrator 与 fix 的四处代码拼接点改为定界包裹；报告新增 `security` 与 `governance` 字段。ReAct 增加相同调用熔断、工具调用上限与任务级 token 预算（超预算的维度直接走规则引擎并标记降级）。
+- **对外能力（REQ-12、REQ-13、REQ-16）**：API Key 鉴权（恒定时间比较、SSE 支持 `?api_key=`、`/mcp` 同样受保护）；Markdown 与 SARIF 2.1.0 导出；OpenAPI 3.1 文档由 zod schema 生成并配 Swagger UI。前端新增统一 HTTP 客户端 `client/src/api/http.ts` 与 API Key 设置入口，9 个组件从手工拼接 `VITE_API_BASE` 迁移过来。
+- **请求级配置与仓库接入（REQ-14、REQ-15）**：`reviewConfig` 支持自定义要求、维度裁剪、严重度过滤与数量截断，并参与语义缓存键；GitHub Webhook 打通（HMAC 校验、变更文件拉取、任务创建、报告回写 PR 评论）。
+- **文档收口（REQ-17）**：新增 `SECURITY.md`、`CHANGELOG.md`；`CONTRIBUTING.md` 补充环境要求与 PR 检查清单；README 增补鉴权、审查配置、导出、Webhook、探针、接口文档章节与 CI 徽章。
+- **计划外工程改动**：Dependabot 8 个分支升级（Actions v7/v4、vite 8.3、vue-tsc 3.3、zod 4.6、tsx 4.23）、express 4 → 5 迁移（含 `req.params` 类型收窄）、分支模型确立为 `master` + `develop`。
+
+**量化结果**
+
+| 指标 | 批次 4 结束时 | 现在 |
+| --- | --- | --- |
+| server 单测 | 21 文件 / 161 用例 | 31 文件 / 235 用例 |
+| client 单测 | 2 文件 / 7 用例 | 2 文件 / 7 用例 |
+| lint | 0 error | 0 error（11 项历史 warning） |
+| 类型检查与构建 | 通过 | 通过 |
+
+**关键决策与踩坑**
+
+1. express 5 把 `req.params` 的值类型拓宽为 `string | string[]`，`/:id` 路由需要显式收窄（`TaskIdRequest`）——升级前先跑 `tsc --noEmit` 评估影响面。
+2. 注入检测规则要避开误报：`system\s*prompt` 会命中正常变量名 `systemPrompt`（改为 `\s+`）；角色伪装规则若允许任意前缀会命中对象字面量 `system: "..."`（改为要求注释前缀）。
+3. 审查配置必须进缓存键，否则「只跑安全维度」的请求会命中旧的「全维度」报告。
+4. 中间件顺序：Webhook 需要原始 body 做 HMAC 校验，必须挂在 `express.json()` 之前；鉴权中间件挂在 MCP 之前，保证 `/mcp` 不被绕过。
+
+**待办（阻塞项）**：本机网络无法访问 GitHub，批次 5 之后的本地提交尚未推送，恢复后执行 `git push origin develop`。
 
