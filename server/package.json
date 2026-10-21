@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "acorn": "^8.16.0",
+    "acorn": "^8.18.0",
     "amqplib": "^2.0.1",
     "cors": "^2.8.5",
     "dotenv": "^17.4.2",
