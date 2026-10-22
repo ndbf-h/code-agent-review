@@ -1,4 +1,5 @@
 import type { Tool } from '../../agent/tool-registry'
+import { getConfig } from '../../config'
 import { formatRetrievedContext, retrieveGuidelines } from './retriever'
 import { retrieveGuidelinesHybrid } from './hybrid-retriever'
 import { registerCustomGuidelines, getGuidelineDocuments } from './knowledge-base'
@@ -28,7 +29,7 @@ const retrieveCodingGuidelines: Tool = {
     }
     // 默认混合检索（BM25+向量+RRF+重排，未配嵌入密钥时自动降级）；RAG_MODE=legacy 切回词元打分 baseline
     const results =
-      process.env.RAG_MODE === 'legacy'
+      getConfig().rag.mode === 'legacy'
         ? retrieveGuidelines(request)
         : await retrieveGuidelinesHybrid(request)
     return JSON.stringify({

@@ -133,6 +133,68 @@ describe('parseConfig', () => {
     expect(config.http.maxBodyBytes).toBe(512 * 1024)
     expect(config.http.maxCodeChars).toBe(100_000)
   })
+
+  it('anthropic 未配置 LLM_BASE_URL 时默认指向 Anthropic', () => {
+    expect(parseConfig({ ...baseEnv, LLM_PROVIDER: 'anthropic' }).llm.baseUrl).toBe(
+      'https://api.anthropic.com'
+    )
+  })
+
+  it('LLM_MAX_CONCURRENCY 非法值报错，不再静默得到 NaN', () => {
+    expect(issuesOf(() => parseConfig({ ...baseEnv, LLM_MAX_CONCURRENCY: 'abc' }))).toEqual([
+      'LLM_MAX_CONCURRENCY'
+    ])
+  })
+
+  it('可选集成缺省关闭，默认值与迁移前一致', () => {
+    const config = parseConfig(baseEnv)
+    expect(config.rag).toEqual({ mode: 'hybrid', embedding: null, rerank: null })
+    expect(config.langfuse).toBeNull()
+    expect(config.roleRouting).toEqual({ roleModels: undefined, routes: {} })
+    expect(config.mcp.clientServers).toBe('')
+    expect(config.eval.judgeModel).toBeUndefined()
+  })
+
+  it('嵌入、重排、Langfuse 配置密钥后启用，并去掉末尾斜杠', () => {
+    const config = parseConfig({
+      ...baseEnv,
+      RAG_MODE: 'legacy',
+      EMBEDDING_API_KEY: 'emb',
+      RERANK_API_KEY: 'rr',
+      RERANK_BASE_URL: 'https://rerank.example/v1/',
+      LANGFUSE_PUBLIC_KEY: 'pk',
+      LANGFUSE_SECRET_KEY: 'sk'
+    })
+    expect(config.rag.mode).toBe('legacy')
+    expect(config.rag.embedding).toEqual({
+      apiKey: 'emb',
+      baseUrl: 'https://api.siliconflow.cn/v1',
+      model: 'BAAI/bge-m3'
+    })
+    expect(config.rag.rerank?.baseUrl).toBe('https://rerank.example/v1')
+    expect(config.langfuse).toEqual({
+      publicKey: 'pk',
+      secretKey: 'sk',
+      baseUrl: 'http://localhost:3000'
+    })
+  })
+
+  it('只配置 Langfuse 公钥时保持纯计数模式', () => {
+    expect(parseConfig({ ...baseEnv, LANGFUSE_PUBLIC_KEY: 'pk' }).langfuse).toBeNull()
+  })
+
+  it('收集 ROLE_MODELS 与 LLM_ROUTE_<别名>_* 端点', () => {
+    const config = parseConfig({
+      ...baseEnv,
+      ROLE_MODELS: 'security=sf:deepseek-ai/DeepSeek-V3',
+      LLM_ROUTE_SF_BASE_URL: 'https://api.siliconflow.cn/v1',
+      LLM_ROUTE_SF_API_KEY: 'sk-sf'
+    })
+    expect(config.roleRouting).toEqual({
+      roleModels: 'security=sf:deepseek-ai/DeepSeek-V3',
+      routes: { SF: { baseUrl: 'https://api.siliconflow.cn/v1', apiKey: 'sk-sf' } }
+    })
+  })
 })
 
 describe('parseByteSize', () => {

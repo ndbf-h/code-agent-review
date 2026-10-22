@@ -13,12 +13,11 @@ describe('parseRoleModels ROLE_MODELS 解析', () => {
     expect(routes.style).toEqual({ model: 'deepseek-chat' })
   })
 
-  it('alias:model 跨 provider：env 齐全时展开 baseUrl/key', () => {
-    const env = {
-      LLM_ROUTE_SF_BASE_URL: 'https://api.siliconflow.cn/v1/',
-      LLM_ROUTE_SF_API_KEY: 'sk-test'
+  it('alias:model 跨 provider：端点齐全时展开 baseUrl/key', () => {
+    const endpoints = {
+      SF: { baseUrl: 'https://api.siliconflow.cn/v1/', apiKey: 'sk-test' }
     }
-    const routes = parseRoleModels('security=sf:deepseek-ai/DeepSeek-V3', env)
+    const routes = parseRoleModels('security=sf:deepseek-ai/DeepSeek-V3', endpoints)
     expect(routes.security).toEqual({
       model: 'deepseek-ai/DeepSeek-V3',
       baseUrl: 'https://api.siliconflow.cn/v1',
@@ -26,9 +25,11 @@ describe('parseRoleModels ROLE_MODELS 解析', () => {
     })
   })
 
-  it('alias 缺少 env 配置时退化为仅换模型名', () => {
+  it('alias 缺少端点配置时退化为仅换模型名', () => {
     const routes = parseRoleModels('security=sf:some-model', {})
     expect(routes.security).toEqual({ model: 'sf:some-model' })
+    const partial = parseRoleModels('security=sf:some-model', { SF: { baseUrl: 'https://x' } })
+    expect(partial.security).toEqual({ model: 'sf:some-model' })
   })
 
   it('非法条目被跳过，不影响其余解析', () => {

@@ -4,6 +4,11 @@ import { buildBm25Index } from '../bm25'
 import { rrfFuse } from '../hybrid-retriever'
 import { retrieveGuidelinesHybrid } from '../hybrid-retriever'
 
+// 嵌入/重排配置经 getConfig() 读取：备齐必填项，且不配置 EMBEDDING_API_KEY（BM25 单分支）
+process.env.DATABASE_URL = 'postgres://user:pass@localhost:5432/test'
+process.env.RABBITMQ_URL = 'amqp://localhost:5672'
+process.env.LLM_API_KEY = 'test-key'
+
 describe('tokenizeForSearch CJK 感知分词', () => {
   it('ASCII 词元保留且小写化', () => {
     expect(tokenizeForSearch('SQL Injection Prevention')).toEqual([

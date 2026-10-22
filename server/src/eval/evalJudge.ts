@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { LlmClient } from '../agent/llm-client'
+import { getConfig } from '../config'
 import { avg } from './metrics'
 import type { CodeReviewSample, ReviewRunResult } from './types'
 
@@ -53,7 +54,7 @@ const JUDGE_SYSTEM_PROMPT = `你是一名严格的代码审查质量评审员。
  */
 export async function runJudgeSuite(fromPath: string): Promise<JudgeSuiteOutput> {
   const payload = JSON.parse(readFileSync(resolve(fromPath), 'utf-8')) as ReviewReportPayload
-  const judgeModel = process.env.EVAL_JUDGE_MODEL
+  const judgeModel = getConfig().eval.judgeModel
   const judge = new LlmClient(judgeModel ? { model: judgeModel } : undefined)
 
   const sampleById = new Map(payload.samples.map(s => [s.id, s]))

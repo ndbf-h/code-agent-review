@@ -46,6 +46,23 @@ export default tseslint.config(
     files: ['server/src/eval/**/*.ts'],
     rules: { 'no-console': 'off' }
   },
+  {
+    // REQ-03 配置单一真源：环境变量只在 config.ts 中解析，其余模块一律通过 getConfig() 读取。
+    // logger.ts 的引导阶段默认值以行内 disable 注释单独放行；eval CLI 与测试文件不受限。
+    files: ['server/src/**/*.ts'],
+    ignores: ['server/src/config.ts', 'server/src/eval/**', '**/__tests__/**', '**/*.test.ts'],
+    rules: {
+      'no-restricted-properties': [
+        'error',
+        {
+          object: 'process',
+          property: 'env',
+          message:
+            '请通过 config.ts 的 getConfig() 读取配置，新增变量需在 envSchema 中声明（REQ-03）'
+        }
+      ]
+    }
+  },
 
   // ── client：浏览器环境 TypeScript + Vue SFC ──
   {
