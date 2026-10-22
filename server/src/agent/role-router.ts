@@ -1,5 +1,6 @@
 import { LlmClient, llmClient } from './llm-client'
 import { createLogger } from '../logger'
+import { getConfig } from '../config'
 
 const logger = createLogger('role-router')
 
@@ -25,10 +26,13 @@ export interface ParsedRoleModels {
   [role: string]: RoleRouteSpec
 }
 
+/** LLM_ROUTE_<别名>_* 端点表（键为大写别名），由 config.roleRouting.routes 提供 */
+export type RoleRouteEndpoints = Record<string, { baseUrl?: string; apiKey?: string }>
+
 /** 解析 ROLE_MODELS 配置字符串（纯函数，便于单测） */
 export function parseRoleModels(
   raw: string | undefined,
-  env: Record<string, string | undefined> = process.env
+  endpoints: RoleRouteEndpoints = {}
 ): ParsedRoleModels {
   if (!raw) return {}
   const result: ParsedRoleModels = {}
@@ -50,8 +54,8 @@ export function parseRoleModels(
       // alias:model —— 解析跨 provider 路由
       const alias = model.slice(0, at).toUpperCase()
       const aliasModel = model.slice(at + 1)
-      const baseUrl = env[`LLM_ROUTE_${alias}_BASE_URL`]
-      const apiKey = env[`LLM_ROUTE_${alias}_API_KEY`]
+      const baseUrl = endpoints[alias]?.baseUrl
+      const apiKey = endpoints[alias]?.apiKey
       if (baseUrl && apiKey) {
         spec.model = aliasModel
         spec.baseUrl = baseUrl.replace(/\/$/, '')
@@ -73,7 +77,8 @@ export function resetRoleRouter(): void {
 
 /** 获取角色对应的 LLM 客户端：无路由配置时返回全局单例（零开销路径） */
 export function getClientForRole(role: string): LlmClient {
-  const routes = parseRoleModels(process.env.ROLE_MODELS)
+  const { roleModels, routes: endpoints } = getConfig().roleRouting
+  const routes = parseRoleModels(roleModels, endpoints)
   const spec = routes[role]
   if (!spec) return llmClient
 

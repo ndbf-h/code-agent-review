@@ -10,10 +10,9 @@
 import pino, { type Logger as PinoLogger, type LevelWithSilent } from 'pino'
 import pretty from 'pino-pretty'
 import { getRequestId } from './middleware/requestContext'
+import { resolveLogSettings, type LogLevel, type LogFormat } from './log-defaults'
 
-/** 日志等级类型 */
-export type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR'
-export type LogFormat = 'json' | 'pretty'
+export type { LogLevel, LogFormat }
 
 export interface LogDestination {
   write(chunk: string): void
@@ -33,15 +32,19 @@ const LEVEL_MAP: Record<LogLevel, LevelWithSilent> = {
   ERROR: 'error'
 }
 
+/**
+ * 引导阶段的默认值：config 尚未加载，只能直接读环境变量；计算逻辑与 config 共用 resolveLogSettings。
+ * 这是 server/src 中除 config.ts 以外唯一允许读取 process.env 的位置（见 eslint.config.mjs）。
+ */
 function envDefaults(): { level: LogLevel; format: LogFormat } {
-  const isProd = process.env.NODE_ENV === 'production'
-  const rawLevel = process.env.LOG_LEVEL?.trim().toUpperCase()
-  const level: LogLevel =
-    rawLevel && rawLevel in LEVEL_MAP ? (rawLevel as LogLevel) : isProd ? 'INFO' : 'DEBUG'
-  const rawFormat = process.env.LOG_FORMAT?.trim().toLowerCase()
-  const format: LogFormat =
-    rawFormat === 'json' || rawFormat === 'pretty' ? rawFormat : isProd ? 'json' : 'pretty'
-  return { level, format }
+  return resolveLogSettings({
+    // eslint-disable-next-line no-restricted-properties -- 引导阶段 config 尚不可用
+    nodeEnv: process.env.NODE_ENV,
+    // eslint-disable-next-line no-restricted-properties -- 同上
+    level: process.env.LOG_LEVEL,
+    // eslint-disable-next-line no-restricted-properties -- 同上
+    format: process.env.LOG_FORMAT
+  })
 }
 
 let root: PinoLogger | null = null

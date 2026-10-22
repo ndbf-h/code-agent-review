@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { randomUUID } from 'node:crypto'
 import { createLogger } from '../logger'
+import { getConfig } from '../config'
 
 const logger = createLogger('tracing')
 
@@ -122,17 +123,17 @@ export function initTracing(options?: {
   secretKey?: string
   baseUrl?: string
 }): void {
-  const publicKey = options?.publicKey || process.env.LANGFUSE_PUBLIC_KEY
-  const secretKey = options?.secretKey || process.env.LANGFUSE_SECRET_KEY
+  const configured = getConfig().langfuse
+  const publicKey = options?.publicKey || configured?.publicKey
+  const secretKey = options?.secretKey || configured?.secretKey
   if (!publicKey || !secretKey) {
     logger.info('Langfuse 未配置密钥，运行在纯计数模式（指标落库不受影响）')
     return
   }
-  const baseUrl = (
-    options?.baseUrl ||
-    process.env.LANGFUSE_BASE_URL ||
-    'http://localhost:3000'
-  ).replace(/\/$/, '')
+  const baseUrl = (options?.baseUrl || configured?.baseUrl || 'http://localhost:3000').replace(
+    /\/$/,
+    ''
+  )
   ingestClient = new LangfuseIngestClient(publicKey, secretKey, baseUrl)
   logger.info('Langfuse 已启用', { baseUrl })
 }

@@ -9,15 +9,27 @@ import type {
 } from './types'
 import { createLogger } from '../logger'
 import { LlmError } from '../errors'
-import { createSemaphore } from '../utils/semaphore'
+import { getConfig } from '../config'
+import { createSemaphore, type Semaphore } from '../utils/semaphore'
 import { recordLlmUsage } from '../observability/tracing'
 
 const logger = createLogger('llm-client')
 
 // ── LLM 并发信号量 ──
 // 每个任务约 5 路 LLM 调用（1 编排 + 4 reviewer 并行），worker prefetch 数 × 5
-// 就是同时在飞的请求上限；超过配额会造成大量 429/排队，这里在进程内统一限流
-const llmGate = createSemaphore(parseInt(process.env.LLM_MAX_CONCURRENCY || '12', 10))
+// 就是同时在飞的请求上限；超过配额会造成大量 429/排队，这里在进程内统一限流。
+// 首次调用时按 LLM_MAX_CONCURRENCY（经 config 校验）惰性创建，模块加载阶段不读取配置。
+let llmGateInstance: Semaphore | null = null
+
+function getLlmGate(): Semaphore {
+  if (!llmGateInstance) llmGateInstance = createSemaphore(getConfig().llm.maxConcurrency)
+  return llmGateInstance
+}
+
+const llmGate = {
+  acquire: () => getLlmGate().acquire(),
+  release: () => getLlmGate().release()
+}
 
 // ── 可观测性：Token 使用量追踪 ──
 
@@ -52,19 +64,10 @@ export function getRequestCount() {
 
 // ── 环境配置 ──
 
-/** 从环境变量加载 LLM 配置 */
-function loadConfig(): LlmConfig {
-  return {
-    apiKey: process.env.LLM_API_KEY || '',
-    baseUrl: process.env.LLM_BASE_URL || 'https://api.deepseek.com',
-    model: process.env.LLM_MODEL || 'deepseek-chat',
-    provider: process.env.LLM_PROVIDER || 'openai'
-  }
-}
-
-/** 获取最大重试次数 */
-function loadMaxRetries(): number {
-  return parseInt(process.env.LLM_MAX_RETRIES || '3', 10)
+/** LLM 配置唯一来源：config.ts 校验后的 llm 段（含按 provider 推导的默认 baseUrl） */
+function loadConfig(): Required<LlmConfig> {
+  const { apiKey, baseUrl, model, provider, maxRetries } = getConfig().llm
+  return { apiKey, baseUrl, model, provider, maxRetries }
 }
 
 /** 是否为可重试的 HTTP 状态码 */
@@ -103,16 +106,30 @@ function extractJson(text: string): string {
 // ── 客户端 ──
 
 class LlmClient {
-  private config: LlmConfig
-  private maxRetries: number
+  private readonly overrides: Partial<LlmConfig>
+  private resolved: Required<LlmConfig> | null = null
 
   /**
    * overrides 可覆盖任意配置项（如评测 judge、按角色路由使用不同模型）；
-   * 未覆盖的字段仍从环境变量读取。
+   * 未覆盖的字段取自 getConfig().llm。
+   * 配置在首次使用时才解析：模块级单例 llmClient 在 import 阶段创建，此时配置未必已加载。
    */
   constructor(overrides?: Partial<LlmConfig>) {
-    this.config = { ...loadConfig(), ...overrides }
-    this.maxRetries = loadMaxRetries()
+    this.overrides = overrides ?? {}
+  }
+
+  private get config(): Required<LlmConfig> {
+    if (!this.resolved) {
+      const defined = Object.fromEntries(
+        Object.entries(this.overrides).filter(([, value]) => value !== undefined)
+      ) as Partial<LlmConfig>
+      this.resolved = { ...loadConfig(), ...defined }
+    }
+    return this.resolved
+  }
+
+  private get maxRetries(): number {
+    return this.config.maxRetries
   }
 
   // ═══════════════════════════════════════════════════

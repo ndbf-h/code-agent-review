@@ -5,7 +5,8 @@
  * - getConfig()：其他模块读取已加载的单例，替代散落的 process.env 直读
  */
 import { z } from 'zod'
-import { configureLogger, type LogLevel, type LogFormat } from './logger'
+import { configureLogger } from './logger'
+import { resolveLogSettings, type LogLevel, type LogFormat } from './log-defaults'
 
 export type NodeEnv = 'development' | 'production' | 'test'
 export type { LogLevel, LogFormat }
@@ -61,6 +62,28 @@ export interface AppConfig {
     token?: string
     apiBase: string
   }
+  rag: {
+    /** hybrid（默认）：BM25 + 向量 + RRF + 重排；legacy：词元打分 baseline */
+    mode: 'hybrid' | 'legacy'
+    /** 未配置 EMBEDDING_API_KEY 时为 null（向量分支关闭） */
+    embedding: { apiKey: string; baseUrl: string; model: string } | null
+    /** 未配置 RERANK_API_KEY 时为 null（重排关闭） */
+    rerank: { apiKey: string; baseUrl: string; model: string } | null
+  }
+  /** Langfuse 上报，未同时配置公私钥时为 null（纯计数模式） */
+  langfuse: { publicKey: string; secretKey: string; baseUrl: string } | null
+  /** 按角色路由模型：ROLE_MODELS 原始串与 LLM_ROUTE_<别名>_* 端点（键为大写别名） */
+  roleRouting: {
+    roleModels?: string
+    routes: Record<string, { baseUrl?: string; apiKey?: string }>
+  }
+  mcp: {
+    /** MCP_CLIENT_SERVERS 原始串（alias=url 逗号分隔），未配置为空串 */
+    clientServers: string
+  }
+  eval: {
+    judgeModel?: string
+  }
 }
 
 export interface ConfigIssue {
@@ -102,6 +125,11 @@ const DEFAULT_BASE_URLS: Record<string, string> = {
   moonshot: 'https://api.moonshot.cn',
   zhipu: 'https://open.bigmodel.cn/api/paas/v4'
 }
+
+/** 嵌入与重排默认使用 SiliconFlow（OpenAI 兼容，有免费额度） */
+const SILICONFLOW_BASE_URL = 'https://api.siliconflow.cn/v1'
+
+const trimSlash = (url: string) => url.replace(/\/$/, '')
 
 /** 解析 '2mb' / '512kb' / '1048576' 为字节数；非法返回 null */
 export function parseByteSize(value: string): number | null {
@@ -170,7 +198,23 @@ const envSchema = z
 
     GITHUB_WEBHOOK_SECRET: z.string().optional(),
     GITHUB_TOKEN: z.string().optional(),
-    GITHUB_API_BASE: httpUrl.default('https://api.github.com')
+    GITHUB_API_BASE: httpUrl.default('https://api.github.com'),
+
+    RAG_MODE: z.string().optional(),
+    EMBEDDING_API_KEY: z.string().optional(),
+    EMBEDDING_BASE_URL: httpUrl.default(SILICONFLOW_BASE_URL),
+    EMBEDDING_MODEL: z.string().default('BAAI/bge-m3'),
+    RERANK_API_KEY: z.string().optional(),
+    RERANK_BASE_URL: httpUrl.default(SILICONFLOW_BASE_URL),
+    RERANK_MODEL: z.string().default('BAAI/bge-reranker-v2-m3'),
+
+    LANGFUSE_PUBLIC_KEY: z.string().optional(),
+    LANGFUSE_SECRET_KEY: z.string().optional(),
+    LANGFUSE_BASE_URL: httpUrl.default('http://localhost:3000'),
+
+    ROLE_MODELS: z.string().optional(),
+    MCP_CLIENT_SERVERS: z.string().default(''),
+    EVAL_JUDGE_MODEL: z.string().optional()
   })
   .superRefine((data, ctx) => {
     const bodyBytes = parseByteSize(data.MAX_BODY_SIZE)
@@ -202,8 +246,7 @@ function parseList(raw: string): string[] {
     .filter(Boolean)
 }
 
-function toAppConfig(env: ParsedEnv): AppConfig {
-  const isProd = env.NODE_ENV === 'production'
+function toAppConfig(env: ParsedEnv, roleRoutes: AppConfig['roleRouting']['routes']): AppConfig {
   const corsList = env.CORS_ORIGINS.trim() === '*' ? '*' : parseList(env.CORS_ORIGINS)
   return {
     env: env.NODE_ENV,
@@ -228,10 +271,11 @@ function toAppConfig(env: ParsedEnv): AppConfig {
       intervalMs: env.TASK_HEARTBEAT_INTERVAL_MS,
       staleMs: env.TASK_HEARTBEAT_STALE_MS
     },
-    log: {
-      level: env.LOG_LEVEL ?? (isProd ? 'INFO' : 'DEBUG'),
-      format: env.LOG_FORMAT ?? (isProd ? 'json' : 'pretty')
-    },
+    log: resolveLogSettings({
+      nodeEnv: env.NODE_ENV,
+      level: env.LOG_LEVEL,
+      format: env.LOG_FORMAT
+    }),
     http: {
       corsOrigins: corsList === '*' || corsList.length === 0 ? '*' : corsList,
       trustProxy: parseTrustProxy(env.TRUST_PROXY),
@@ -251,8 +295,61 @@ function toAppConfig(env: ParsedEnv): AppConfig {
       webhookSecret: env.GITHUB_WEBHOOK_SECRET,
       token: env.GITHUB_TOKEN,
       apiBase: env.GITHUB_API_BASE
+    },
+    rag: {
+      // 与历史行为一致：只有显式 legacy 才切回 baseline，其余取值一律为混合检索
+      mode: env.RAG_MODE === 'legacy' ? 'legacy' : 'hybrid',
+      embedding: env.EMBEDDING_API_KEY
+        ? {
+            apiKey: env.EMBEDDING_API_KEY,
+            baseUrl: trimSlash(env.EMBEDDING_BASE_URL),
+            model: env.EMBEDDING_MODEL
+          }
+        : null,
+      rerank: env.RERANK_API_KEY
+        ? {
+            apiKey: env.RERANK_API_KEY,
+            baseUrl: trimSlash(env.RERANK_BASE_URL),
+            model: env.RERANK_MODEL
+          }
+        : null
+    },
+    langfuse:
+      env.LANGFUSE_PUBLIC_KEY && env.LANGFUSE_SECRET_KEY
+        ? {
+            publicKey: env.LANGFUSE_PUBLIC_KEY,
+            secretKey: env.LANGFUSE_SECRET_KEY,
+            baseUrl: trimSlash(env.LANGFUSE_BASE_URL)
+          }
+        : null,
+    roleRouting: {
+      roleModels: env.ROLE_MODELS,
+      routes: roleRoutes
+    },
+    mcp: {
+      clientServers: env.MCP_CLIENT_SERVERS
+    },
+    eval: {
+      judgeModel: env.EVAL_JUDGE_MODEL
     }
   }
+}
+
+const ROLE_ROUTE_PATTERN = /^LLM_ROUTE_([A-Z0-9]+)_(BASE_URL|API_KEY)$/
+
+/**
+ * 收集 LLM_ROUTE_<别名>_BASE_URL / _API_KEY：别名由 ROLE_MODELS 动态决定，无法在 schema 中逐个声明。
+ */
+function collectRoleRoutes(env: Record<string, string>): AppConfig['roleRouting']['routes'] {
+  const routes: AppConfig['roleRouting']['routes'] = {}
+  for (const [key, value] of Object.entries(env)) {
+    const match = ROLE_ROUTE_PATTERN.exec(key)
+    if (!match) continue
+    const route = (routes[match[1]] ??= {})
+    if (match[2] === 'BASE_URL') route.baseUrl = value
+    else route.apiKey = value
+  }
+  return routes
 }
 
 /** 空字符串视为未设置（.env 里 KEY= 的写法），交给默认值处理 */
@@ -269,7 +366,8 @@ function stripEmpty(env: NodeJS.ProcessEnv): Record<string, string> {
  * 单测与 getConfig() 使用；不读取全局状态。
  */
 export function parseConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
-  const result = envSchema.safeParse(stripEmpty(env))
+  const cleaned = stripEmpty(env)
+  const result = envSchema.safeParse(cleaned)
   if (!result.success) {
     const issues: ConfigIssue[] = result.error.issues.map(issue => ({
       field: issue.path.map(String).join('.') || '(root)',
@@ -277,7 +375,7 @@ export function parseConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     }))
     throw new ConfigError(issues)
   }
-  return toAppConfig(result.data)
+  return toAppConfig(result.data, collectRoleRoutes(cleaned))
 }
 
 let loaded: AppConfig | null = null
