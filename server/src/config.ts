@@ -61,6 +61,8 @@ export interface AppConfig {
     webhookSecret?: string
     token?: string
     apiBase: string
+    /** Webhook 收集 PR 代码时的单文件字符上限，默认 MAX_CODE_CHARS 的 1/4 */
+    maxFileChars: number
   }
   rag: {
     /** hybrid（默认）：BM25 + 向量 + RRF + 重排；legacy：词元打分 baseline */
@@ -199,6 +201,12 @@ const envSchema = z
     GITHUB_WEBHOOK_SECRET: z.string().optional(),
     GITHUB_TOKEN: z.string().optional(),
     GITHUB_API_BASE: httpUrl.default('https://api.github.com'),
+    GITHUB_MAX_FILE_CHARS: z
+      .preprocess(
+        v => (typeof v === 'string' && v.trim() !== '' ? Number(v) : v),
+        z.number().int('必须是整数').min(1, '不能小于 1')
+      )
+      .optional(),
 
     RAG_MODE: z.string().optional(),
     EMBEDDING_API_KEY: z.string().optional(),
@@ -294,7 +302,11 @@ function toAppConfig(env: ParsedEnv, roleRoutes: AppConfig['roleRouting']['route
     github: {
       webhookSecret: env.GITHUB_WEBHOOK_SECRET,
       token: env.GITHUB_TOKEN,
-      apiBase: env.GITHUB_API_BASE
+      apiBase: env.GITHUB_API_BASE,
+      maxFileChars: Math.min(
+        env.GITHUB_MAX_FILE_CHARS ?? Math.floor(env.MAX_CODE_CHARS / 4),
+        env.MAX_CODE_CHARS
+      )
     },
     rag: {
       // 与历史行为一致：只有显式 legacy 才切回 baseline，其余取值一律为混合检索

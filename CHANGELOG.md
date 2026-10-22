@@ -42,6 +42,12 @@
 - Webhook 创建的任务此前在未注入发布函数时只入库不入队，会一直停在 pending；现在与手动提交共用 `submitReviewTask`，入队失败时任务标记为失败，接口返回 502 `QUEUE_UNAVAILABLE`。（优化方案 P0-1）
 - 任务在收尾瞬间被取消时不再回写 PR 评论：评论改在任务确认进入 completed 之后发送，且不计入任务耗时；缓存命中路径同样如此。（优化方案 P0-2）
 - 审查配置的严重度过滤同时作用于各维度结果，按维度查看与 Markdown/SARIF 导出不再包含已过滤的问题；`maxIssues` 仍只截断最终问题清单。（优化方案 P1-2）
+- GitHub Webhook 可靠性（优化方案 P0-3、P1-3）：
+  - 签名与 payload 校验通过后立即应答 `202 { accepted, deliveryId }`，拉取文件与建任务转入后台，避免大 PR 超时重投；响应体不再包含 `taskId`。
+  - 新增迁移 `003_task_source_dedupe`（`tasks.dedupe_key` + 部分唯一索引），同一 `repo#PR@headSha` 只建一个任务、只评论一次；历史数据不受约束。
+  - 代码收集遇到超限文件改为跳过并继续，新增单文件上限 `GITHUB_MAX_FILE_CHARS`（默认 `MAX_CODE_CHARS` 的 1/4），跳过的文件写入任务标题与 `task_queued` 事件。
+  - 任务语言按扩展名推断（取变更行数最多的语言），不再固定为 `mixed`；`// FILE:` 头部标注各文件语言。
+  - 原始请求体上限改为读取 `MAX_BODY_SIZE`，不再写死 `5mb`。
 
 ### 安全
 

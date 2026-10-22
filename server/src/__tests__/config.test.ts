@@ -37,6 +37,7 @@ describe('parseConfig', () => {
       reactRepeatThreshold: 2
     })
     expect(config.github.apiBase).toBe('https://api.github.com')
+    expect(config.github.maxFileChars).toBe(75_000)
   })
 
   it('缺失全部必填项时一次性报出所有字段名', () => {
@@ -132,6 +133,18 @@ describe('parseConfig', () => {
     const config = parseConfig({ ...baseEnv, MAX_BODY_SIZE: '512kb', MAX_CODE_CHARS: '100000' })
     expect(config.http.maxBodyBytes).toBe(512 * 1024)
     expect(config.http.maxCodeChars).toBe(100_000)
+  })
+
+  it('GITHUB_MAX_FILE_CHARS 可覆盖，且不超过 MAX_CODE_CHARS', () => {
+    expect(parseConfig({ ...baseEnv, GITHUB_MAX_FILE_CHARS: '5000' }).github.maxFileChars).toBe(
+      5000
+    )
+    expect(
+      parseConfig({ ...baseEnv, GITHUB_MAX_FILE_CHARS: '999999999' }).github.maxFileChars
+    ).toBe(300_000)
+    expect(issuesOf(() => parseConfig({ ...baseEnv, GITHUB_MAX_FILE_CHARS: '0' }))).toEqual([
+      'GITHUB_MAX_FILE_CHARS'
+    ])
   })
 
   it('anthropic 未配置 LLM_BASE_URL 时默认指向 Anthropic', () => {
