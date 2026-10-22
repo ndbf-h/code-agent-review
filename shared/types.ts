@@ -75,6 +75,8 @@ interface ReportGovernance {
   toolCalls: number
   /** 是否因超出 token 预算而提前降级 */
   budgetExceeded: boolean
+  /** 首次发现预算耗尽的位置：reviewer 角色与阶段（start：启动前；react：ReAct 第 round 轮；structured：结构化输出前） */
+  budgetExceededAt?: { role: string; stage: 'start' | 'react' | 'structured'; round?: number }
 }
 
 interface ReportContent {
