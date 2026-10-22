@@ -9,7 +9,8 @@ import { getRulesByDimension, scanCode } from '../tools/rules'
 import { createLogger } from '../logger'
 import { createInsertMessageFn } from './persistence'
 import { withReviewerSpan } from '../observability/tracing'
-import { detectInjection, redactSecrets, wrapUntrustedCode } from '../security/prompt-guard'
+import { detectInjection, wrapUntrustedCode } from '../security/prompt-guard'
+import { applyReviewConfig, finalizeReport } from './report-postprocess'
 import type {
   AgentRole,
   ReportContent,
@@ -388,28 +389,8 @@ export function resolveReviewerRoles(reviewConfig?: ReviewConfig): AgentRole[] {
   return ALL_REVIEWER_ROLES.filter(role => requested.includes(role as ReviewDimension))
 }
 
-/**
- * REQ-14：按审查配置收敛最终问题列表。
- * 先按 severityThreshold 过滤，再按「严重度 → 行号」排序后用 maxIssues 截断。
- */
-export function applyReviewConfig(issues: Issue[], reviewConfig?: ReviewConfig): Issue[] {
-  if (!reviewConfig) return issues
-  const weight: Record<Issue['severity'], number> = { critical: 0, warning: 1, suggestion: 2 }
-  let result = issues
-
-  if (reviewConfig.severityThreshold) {
-    const threshold = weight[reviewConfig.severityThreshold] ?? 2
-    result = result.filter(issue => (weight[issue.severity] ?? 9) <= threshold)
-  }
-
-  if (reviewConfig.maxIssues && reviewConfig.maxIssues > 0) {
-    result = [...result]
-      .sort((a, b) => weight[a.severity] - weight[b.severity] || a.line - b.line)
-      .slice(0, reviewConfig.maxIssues)
-  }
-
-  return result
-}
+/** 兼容旧导入路径：过滤与截断的实现已收口到 report-postprocess */
+export { applyReviewConfig }
 
 async function runReviewTask(
   taskId: string,
@@ -573,7 +554,7 @@ async function runReviewTask(
   // ═══════════════════════════════════════════════════════
   // REQ-14：只运行请求指定的维度；未指定则四个维度全跑
   const reviewerRoles = resolveReviewerRoles(reviewConfig)
-  const reviewerResults: Record<string, { issues: Issue[]; score: number }> = {}
+  const reviewerResults: Record<string, AgentResult> = {}
   const reviewStatus: Record<string, 'success' | 'fallback' | 'failed'> = {}
 
   // REQ-11：每个 reviewer 一份治理计数器（该 reviewer 的重试共享），另加任务级 token 预算
@@ -732,7 +713,7 @@ async function runReviewTask(
 
   // 使用 generateReport 工具生成最终报告
   const reportTool = toolRegistry.get('generateReport')
-  let finalReport: ReportContent
+  let reportScore = overallScore
   if (reportTool) {
     const reportResult = await reportTool.execute({
       collectionResult,
@@ -741,45 +722,26 @@ async function runReviewTask(
     })
     try {
       const parsed = JSON.parse(reportResult)
-      finalReport = {
-        issues: mergedIssues,
-        score: parsed.score || overallScore,
-        agentResults: reviewerResults as unknown as Record<string, AgentResult>,
-        reviewStatus
-      }
+      reportScore = parsed.score || overallScore
     } catch {
-      finalReport = {
-        issues: mergedIssues,
-        score: overallScore,
-        agentResults: reviewerResults as unknown as Record<string, AgentResult>,
-        reviewStatus
-      }
-    }
-  } else {
-    finalReport = {
-      issues: mergedIssues,
-      score: overallScore,
-      agentResults: reviewerResults as unknown as Record<string, AgentResult>,
-      reviewStatus
+      // 报告工具输出无法解析时沿用聚合评分
     }
   }
 
-  // REQ-10：报告落库前对问题描述与建议做密钥脱敏，并记录注入检测结论
-  finalReport.issues = finalReport.issues.map(issue => ({
-    ...issue,
-    message: redactSecrets(issue.message),
-    suggestion: redactSecrets(issue.suggestion)
-  }))
-  // REQ-14：按 severityThreshold 过滤、按 maxIssues 截断
-  finalReport.issues = applyReviewConfig(finalReport.issues, reviewConfig)
+  const draftReport: ReportContent = {
+    issues: mergedIssues,
+    score: reportScore,
+    agentResults: reviewerResults,
+    reviewStatus
+  }
 
   if (injectionFindings.length > 0) {
-    finalReport.security = {
+    draftReport.security = {
       injectionSuspected: true,
       findings: injectionFindings.map(item => ({
         line: item.line,
         pattern: item.pattern,
-        excerpt: redactSecrets(item.excerpt)
+        excerpt: item.excerpt
       }))
     }
   }
@@ -791,8 +753,11 @@ async function runReviewTask(
     budgetExceeded
   }
   if (governance.loopBreaks > 0 || governance.toolCalls > 0 || governance.budgetExceeded) {
-    finalReport.governance = governance
+    draftReport.governance = governance
   }
+
+  // REQ-10 / REQ-14：脱敏与审查配置统一在此收口，覆盖顶层与各维度结果
+  const finalReport = finalizeReport(draftReport, reviewConfig)
 
   const t4 = performance.now()
   agentLatency.reportGeneration = Math.round(t4 - t3)

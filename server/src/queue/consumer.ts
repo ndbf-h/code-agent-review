@@ -20,6 +20,7 @@ import {
 } from '../db/queries'
 import { saveReport } from '../services/taskService'
 import { runReviewTask } from '../agent/orchestrator'
+import { finalizeReport } from '../agent/report-postprocess'
 import { llmClient } from '../agent/llm-client'
 import { appendTaskEvent } from '../services/eventService'
 import { withTaskTrace } from '../observability/tracing'
@@ -186,7 +187,7 @@ function sleepUntil(deadline: number): Promise<void> {
  * orchestrator 正常结束时自己会发 report_ready / task_completed 事件（经 sink 落库），
  * 失败时不会发终态事件，由这里补 error。
  */
-async function runClaimedTask(
+export async function runClaimedTask(
   taskId: string,
   producer: TaskProducer,
   config: AppConfig
@@ -212,11 +213,14 @@ async function runClaimedTask(
   }
   if (cached) {
     const startedAt = Date.now()
+    let replayed: ReportContent | null = null
     try {
-      const reportContent = JSON.parse(cached.reportContent) as ReportContent
-      await saveReport(taskId, reportContent, cached.score)
-      // REQ-15：来源为 GitHub PR 的任务，缓存命中同样回写评论
-      await commentReportToPullRequest(task, reportContent)
+      // 旧版本缓存可能含未脱敏的维度结果，回放前统一再走一遍后处理（幂等）
+      const reportContent = finalizeReport(
+        JSON.parse(cached.reportContent) as ReportContent,
+        task.reviewConfig
+      )
+      await saveReport(taskId, reportContent, reportContent.score)
       await appendTaskEvent(taskId, {
         type: 'agent_thought',
         message: '命中审查结果缓存，直接复用历史报告（相同代码/语言/模型）'
@@ -224,6 +228,7 @@ async function runClaimedTask(
       await appendTaskEvent(taskId, { type: 'report_ready', report: reportContent })
       await appendTaskEvent(taskId, { type: 'task_completed' })
       await updateTaskStatus(taskId, 'completed')
+      replayed = reportContent
       await bumpReviewCacheHit(cacheKey)
       await insertTaskMetric({
         taskId,
@@ -237,10 +242,19 @@ async function runClaimedTask(
         cacheHit: true
       })
       logger.info('任务命中缓存，零成本完成', { taskId, cacheKey: cacheKey.slice(0, 12) })
-      return 'completed'
     } catch (error) {
-      // 缓存数据损坏时退回正常执行
-      logger.warn('缓存命中但回放失败（忽略，走正常执行）', { taskId, error })
+      if (!replayed) {
+        // 缓存数据损坏时退回正常执行
+        logger.warn('缓存命中但回放失败（忽略，走正常执行）', { taskId, error })
+      } else {
+        // 任务已完成，仅记账失败：不能退回正常执行，否则会重复审查
+        logger.warn('缓存命中任务已完成，但命中计数或指标落库失败', { taskId, error })
+      }
+    }
+    if (replayed) {
+      // REQ-15：评论在任务进入终态之后再发，且不计入任务耗时
+      await commentReportToPullRequest(task, replayed)
+      return 'completed'
     }
   }
 
@@ -282,6 +296,7 @@ async function runClaimedTask(
   let runError: string | undefined
   let usage = { promptTokens: 0, completionTokens: 0, llmCalls: 0, durationMs: 0 }
   let fallbackReviewers = 0
+  let completedReport: ReportContent | null = null
 
   try {
     // 全链路追踪上下文贯穿 runReviewTask → reviewer → llm-client，同时精确累计该任务的 token 用量
@@ -295,14 +310,8 @@ async function runClaimedTask(
         abortController.signal,
         task.reviewConfig
       )
-      const results = Object.values(reportContent.agentResults || {})
-      const score =
-        results.length > 0
-          ? Math.round(results.reduce((sum, r) => sum + r.score, 0) / results.length)
-          : 0
-      await saveReport(taskId, reportContent, score)
-      // REQ-15：来源为 GitHub PR 的任务，完成后回写 Markdown 报告评论
-      await commentReportToPullRequest(task, reportContent)
+      // 报告评分即综合评分（与缓存、导出口径一致），不再在此按维度重新平均
+      await saveReport(taskId, reportContent, reportContent.score)
       return reportContent
     })
     usage = traced.usage
@@ -319,6 +328,7 @@ async function runClaimedTask(
       return 'cancelled'
     }
     runOutcome = 'completed'
+    completedReport = traced.result
     // 成功结果写入语义缓存（失败结果不入缓存；模型/prompt 版本变化时键自然失效）
     await saveReviewCache({
       codeHash: cacheKey,
@@ -384,6 +394,12 @@ async function runClaimedTask(
     } catch (metricError) {
       logger.error('任务指标落库失败', { taskId, error: metricError })
     }
+  }
+
+  // REQ-15：来源为 GitHub PR 的任务，在状态确认为 completed 之后再回写评论；
+  // 放在 withTaskTrace 与指标之外，评论耗时不计入任务时长，失败也不影响任务状态
+  if (completedReport) {
+    await commentReportToPullRequest(task, completedReport)
   }
 
   return runOutcome

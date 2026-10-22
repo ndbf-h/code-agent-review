@@ -240,6 +240,29 @@ const assignAgent: Tool = {
   }
 }
 
+/** 各维度在综合评分中的权重（安全权重最高） */
+const DIMENSION_SCORE_WEIGHTS: Record<string, number> = {
+  security: 1.5,
+  performance: 1.0,
+  style: 0.8,
+  logic: 1.2
+}
+
+/**
+ * 综合评分：各维度得分按权重加权平均（未知维度权重 1.0）。
+ * collectResults 与报告后处理（finalizeReport）共用，保证过滤前后评分口径一致。
+ */
+export function weightedOverallScore(results: { dimension: string; score: number }[]): number {
+  let weightedSum = 0
+  let totalWeight = 0
+  for (const r of results) {
+    const w = DIMENSION_SCORE_WEIGHTS[r.dimension] || 1.0
+    weightedSum += r.score * w
+    totalWeight += w
+  }
+  return totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 0
+}
+
 /**
  * collectResults — 聚合与去重审查结果
  * 合并多个维度的审查发现，去重跨维度重复项，计算综合评分
@@ -305,20 +328,7 @@ const collectResults: Tool = {
     })
 
     // 综合评分（加权平均，安全权重大于其他维度）
-    const weights: Record<string, number> = {
-      security: 1.5,
-      performance: 1.0,
-      style: 0.8,
-      logic: 1.2
-    }
-    let weightedSum = 0
-    let totalWeight = 0
-    for (const r of results) {
-      const w = weights[r.dimension] || 1.0
-      weightedSum += r.score * w
-      totalWeight += w
-    }
-    const overallScore = totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 0
+    const overallScore = weightedOverallScore(results)
 
     return JSON.stringify({
       mergedIssues,
