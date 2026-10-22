@@ -362,7 +362,9 @@ SSE 的 `GET /api/tasks/:id/stream` 与 `POST /api/tasks/:id/chat/stream` 额外
 
 - 使用 `X-Hub-Signature-256` 做 HMAC SHA-256 校验，签名不合法返回 401
 - 仅处理 `pull_request` 事件的 `opened` / `synchronize` / `reopened` 动作，其余返回 204
-- 拉取变更文件（按扩展名白名单过滤、总量受 `MAX_CODE_CHARS` 限制）作为一个任务提交审查，任务来源记录为 `{ provider: 'github', repo, prNumber, headSha }`
+- 校验通过后立即返回 `202 { accepted: true, deliveryId }`，拉取文件与建任务在后台进行，避免大 PR 触发 GitHub 的 10 秒投递超时与重投
+- 同一仓库、PR 与 `headSha` 只创建一个任务（`tasks.dedupe_key` 唯一索引），重复投递只记日志；日志附带 `X-GitHub-Delivery` 便于排查
+- 拉取变更文件（按扩展名白名单过滤；单文件受 `GITHUB_MAX_FILE_CHARS`、总量受 `MAX_CODE_CHARS` 限制，超限文件跳过并在 `task_queued` 事件中列出）作为一个任务提交审查；任务语言取变更行数最多的语言，任务来源记录为 `{ provider: 'github', repo, prNumber, headSha }`
 - 任务完成后把 Markdown 报告回写为 PR 评论（回写失败只记日志，不影响任务状态）
 
 未配置 `GITHUB_WEBHOOK_SECRET` 时该端点返回 404（视为未启用）。

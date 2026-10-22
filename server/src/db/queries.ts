@@ -33,10 +33,16 @@ export interface KnowledgeChunk {
 
 // ── Tasks ──
 
-export async function insertTask(task: Task): Promise<void> {
+/**
+ * 写入任务。传入 dedupeKey 时与已有同键任务冲突则不写入并返回 false（外部来源重复投递）；
+ * 未传 dedupeKey 的任务不参与去重，总是返回 true。
+ */
+export async function insertTask(task: Task, dedupeKey?: string): Promise<boolean> {
   const db = getDb()
-  await db.query(
-    'INSERT INTO tasks (id, title, code_snippet, language, scope_id, status, created_at, review_config, source) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
+  const { rowCount } = await db.query(
+    `INSERT INTO tasks (id, title, code_snippet, language, scope_id, status, created_at, review_config, source, dedupe_key)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+     ON CONFLICT (dedupe_key) WHERE dedupe_key IS NOT NULL DO NOTHING`,
     [
       task.id,
       task.title,
@@ -46,9 +52,11 @@ export async function insertTask(task: Task): Promise<void> {
       task.status,
       task.createdAt,
       task.reviewConfig ? JSON.stringify(task.reviewConfig) : null,
-      task.source ? JSON.stringify(task.source) : null
+      task.source ? JSON.stringify(task.source) : null,
+      dedupeKey ?? null
     ]
   )
+  return (rowCount ?? 0) > 0
 }
 
 /** JSONB 列取值：pg 通常已解析为对象，字符串形态时兜底解析 */

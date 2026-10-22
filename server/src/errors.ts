@@ -55,6 +55,13 @@ export class QueueUnavailableError extends AppError {
   }
 }
 
+/** 外部来源的重复投递：同一去重键已有任务，本次未创建 */
+export class DuplicateTaskError extends AppError {
+  constructor(public readonly dedupeKey: string) {
+    super('相同来源的审查任务已存在', 'DUPLICATE_TASK', 409)
+  }
+}
+
 /** 输入验证错误 */
 export class ValidationError extends AppError {
   constructor(message: string, details?: unknown) {

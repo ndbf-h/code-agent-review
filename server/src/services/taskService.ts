@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid'
 import { getConfig } from '../config'
-import { QueueUnavailableError } from '../errors'
+import { DuplicateTaskError, QueueUnavailableError } from '../errors'
 import { createLogger } from '../logger'
 import type {
   Task,
@@ -35,17 +35,25 @@ export interface CreateTaskInput {
   scopeId?: string
   reviewConfig?: ReviewConfig
   source?: TaskSource
+  /**
+   * 外部来源的去重键（如 GitHub `repo#pr@headSha`）。已有同键任务时不再创建，
+   * createTask 返回 null、submitReviewTask 抛出 DuplicateTaskError。
+   */
+  dedupeKey?: string
 }
 
 /** 提交审查任务的输入：在创建任务之外，可关联一个由助手生成的代码版本 */
 export interface SubmitReviewTaskInput extends CreateTaskInput {
   sourceVersionId?: string
+  /** 附加到 task_queued 事件的说明（如 Webhook 跳过的文件），让使用者知道实际审查范围 */
+  queueNotice?: string
 }
 
 /** 把任务投递到队列（生产环境为 RabbitMQ 生产者，单测注入 mock） */
 export type PublishTask = (taskId: string) => Promise<void>
 
-async function createTask(input: CreateTaskInput): Promise<Task> {
+/** 创建任务；带 dedupeKey 且与已有任务冲突时返回 null */
+async function createTask(input: CreateTaskInput): Promise<Task | null> {
   const id = uuidv4()
   const task: Task = {
     id,
@@ -60,8 +68,8 @@ async function createTask(input: CreateTaskInput): Promise<Task> {
   if (input.reviewConfig) task.reviewConfig = input.reviewConfig
   if (input.source) task.source = input.source
 
-  await insertTask(task)
-  return task
+  const inserted = await insertTask(task, input.dedupeKey)
+  return inserted ? task : null
 }
 
 async function createAgentsForTask(taskId: string): Promise<void> {
@@ -88,18 +96,23 @@ async function createAgentsForTask(taskId: string): Promise<void> {
  * messages / tool_calls 外键引用 agents，缺少 agents 行会导致审查对话无法落库。
  *
  * 入队失败时任务标记为 failed 并写入 error 事件，然后抛出 {@link QueueUnavailableError}，
- * 由调用方决定如何响应（HTTP 路由映射为 502）。
+ * 由调用方决定如何响应（HTTP 路由映射为 502）。带 dedupeKey 的重复提交抛出 {@link DuplicateTaskError}，
+ * 此时不创建 agents、不写事件、不入队。
  */
 async function submitReviewTask(
   input: SubmitReviewTaskInput,
   publishTask: PublishTask
 ): Promise<Task> {
-  const { sourceVersionId, ...createInput } = input
+  const { sourceVersionId, queueNotice, ...createInput } = input
   const task = await createTask(createInput)
+  if (!task) throw new DuplicateTaskError(input.dedupeKey ?? '')
   await createAgentsForTask(task.id)
   if (sourceVersionId) await linkCodeVersionToReview(sourceVersionId, task.id)
 
-  await appendTaskEvent(task.id, { type: 'task_queued', message: '任务已创建，进入审查队列' })
+  const queuedMessage = queueNotice
+    ? `任务已创建，进入审查队列。${queueNotice}`
+    : '任务已创建，进入审查队列'
+  await appendTaskEvent(task.id, { type: 'task_queued', message: queuedMessage })
   try {
     await publishTask(task.id)
   } catch (error) {
