@@ -48,6 +48,7 @@
   - 代码收集遇到超限文件改为跳过并继续，新增单文件上限 `GITHUB_MAX_FILE_CHARS`（默认 `MAX_CODE_CHARS` 的 1/4），跳过的文件写入任务标题与 `task_queued` 事件。
   - 任务语言按扩展名推断（取变更行数最多的语言），不再固定为 `mixed`；`// FILE:` 头部标注各文件语言。
   - 原始请求体上限改为读取 `MAX_BODY_SIZE`，不再写死 `5mb`。
+- token 预算真正生效（REQ-11，优化方案 P1-1）：此前只在 reviewer 启动时检查一次，启动后的 ReAct 循环不受约束。现在并行 reviewer 共享同一份任务级预算，ReAct 每轮调用前、结构化输出前、失败重试前都会检查；耗尽后基于已有分析给出结论，没有可用结论时降级为规则引擎。任务总用量上限约为「预算 + 在途调用」。报告 `governance` 新增 `budgetExceededAt`（首次耗尽的 reviewer 与阶段），Markdown 导出同步展示。
 
 ### 安全
 

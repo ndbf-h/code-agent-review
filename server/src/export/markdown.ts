@@ -107,6 +107,16 @@ export function renderReportMarkdown(task: Task, report: ReportContent): string 
     lines.push(`- 工具调用：${report.governance.toolCalls} 次`)
     lines.push(`- 重复调用熔断：${report.governance.loopBreaks} 次`)
     lines.push(`- token 预算降级：${report.governance.budgetExceeded ? '已触发' : '未触发'}`)
+    const at = report.governance.budgetExceededAt
+    if (at) {
+      const stage =
+        at.stage === 'start'
+          ? '启动前'
+          : at.stage === 'structured'
+            ? '结构化输出前'
+            : `ReAct${at.round ? ` 第 ${at.round} 轮` : ''}`
+      lines.push(`- 预算耗尽位置：${at.role}（${stage}）`)
+    }
     lines.push('')
   }
 
