@@ -2,7 +2,11 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 import express, { Router, type Request, type Response } from 'express'
 import { getConfig } from '../../config'
 import { createLogger } from '../../logger'
-import { createTask } from '../../services/taskService'
+import {
+  submitReviewTask,
+  type PublishTask,
+  type SubmitReviewTaskInput
+} from '../../services/taskService'
 import { renderReportMarkdown } from '../../export/markdown'
 import { createGitHubClient, type GitHubClient } from './client'
 import type { ReportContent, Task, TaskSource } from '../../../../shared/types'
@@ -68,14 +72,10 @@ export interface GitHubWebhookDeps {
   /** 未配置时路由返回 404（功能未启用） */
   secret?: string
   client?: GitHubClient
-  /** 任务创建与入队依赖注入，便于单测 */
-  createReviewTask?: (
-    code: string,
-    language: string,
-    title: string,
-    source: TaskSource
-  ) => Promise<Task>
-  publishTask?: (taskId: string) => Promise<void>
+  /** 任务入队函数（必填：Webhook 创建的任务必须进入队列才会被执行） */
+  publishTask: PublishTask
+  /** 任务提交依赖注入，便于单测；默认走 taskService.submitReviewTask */
+  submitTask?: (input: SubmitReviewTaskInput, publishTask: PublishTask) => Promise<Task>
   /** 单次审查代码总量上限，默认取 MAX_CODE_CHARS */
   maxCodeChars?: number
 }
@@ -110,15 +110,6 @@ export async function collectPullRequestCode(
   }
 
   return chunks.join('\n\n')
-}
-
-async function defaultCreateReviewTask(
-  code: string,
-  language: string,
-  title: string,
-  source: TaskSource
-): Promise<Task> {
-  return createTask(code, language, title, undefined, undefined, source)
 }
 
 /**
@@ -179,14 +170,11 @@ export function createGitHubWebhookRouter(deps: GitHubWebhookDeps): Router {
         }
 
         const source: TaskSource = { provider: 'github', repo, prNumber, headSha }
-        const create = deps.createReviewTask ?? defaultCreateReviewTask
-        const task = await create(code, 'mixed', `PR #${prNumber} 代码审查（${repo}）`, source)
-
-        if (deps.publishTask) {
-          await deps.publishTask(task.id)
-        } else {
-          logger.warn('未注入任务发布器，Webhook 任务未入队', { taskId: task.id })
-        }
+        const submit = deps.submitTask ?? submitReviewTask
+        const task = await submit(
+          { code, language: 'mixed', title: `PR #${prNumber} 代码审查（${repo}）`, source },
+          deps.publishTask
+        )
 
         logger.info('GitHub Webhook 已创建审查任务', { taskId: task.id, repo, prNumber })
         res.status(202).json({ taskId: task.id })
