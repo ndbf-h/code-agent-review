@@ -3,6 +3,7 @@ import request from 'supertest'
 import { createApp } from '../../app'
 import { loadConfig } from '../../config'
 import { setTaskProducer } from '../tasks'
+import { QueueUnavailableError } from '../../errors'
 import * as queries from '../../db/queries'
 import * as taskService from '../../services/taskService'
 import * as knowledgeService from '../../services/knowledgeService'
@@ -26,8 +27,7 @@ vi.mock('../../db/queries', () => ({
   cancelTask: vi.fn()
 }))
 vi.mock('../../services/taskService', () => ({
-  createTask: vi.fn(),
-  createAgentsForTask: vi.fn(),
+  submitReviewTask: vi.fn(),
   getTaskDetail: vi.fn()
 }))
 vi.mock('../../services/eventService', () => ({
@@ -95,8 +95,11 @@ beforeAll(() => {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  vi.mocked(taskService.createTask).mockResolvedValue(sampleTask as never)
-  vi.mocked(taskService.createAgentsForTask).mockResolvedValue(undefined)
+  // 模拟真实 submitReviewTask 的入队行为：调用传入的发布函数
+  vi.mocked(taskService.submitReviewTask).mockImplementation(async (_input, publish) => {
+    await publish(TASK_ID)
+    return sampleTask as never
+  })
   vi.mocked(taskService.getTaskDetail).mockResolvedValue({
     task: sampleTask,
     agents: [],
@@ -130,7 +133,7 @@ describe('POST /api/tasks', () => {
   it('缺少 language 返回 400 与字段级 details', async () => {
     const res = await request(app).post('/api/tasks').send({ code: 'x' })
     expectValidationError(res, 'body', 'language')
-    expect(taskService.createTask).not.toHaveBeenCalled()
+    expect(taskService.submitReviewTask).not.toHaveBeenCalled()
   })
 
   it('code 超过 MAX_CODE_CHARS 返回 400', async () => {
@@ -157,14 +160,12 @@ describe('POST /api/tasks', () => {
       .post('/api/tasks')
       .send({ code: 'const a = 1', language: 'javascript', title: '  demo  ' })
     expect(res.status).toBe(201)
-    // 第 5 个参数是 reviewConfig（REQ-14），本请求未提供
-    expect(taskService.createTask).toHaveBeenCalledWith(
-      'const a = 1',
-      'javascript',
-      'demo',
-      undefined,
-      undefined
+    expect(taskService.submitReviewTask).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'const a = 1', language: 'javascript', title: 'demo' }),
+      expect.any(Function)
     )
+    const [input] = vi.mocked(taskService.submitReviewTask).mock.calls[0]
+    expect(input.reviewConfig).toBeUndefined()
     expect(publishTask).toHaveBeenCalledWith(TASK_ID)
   })
 
@@ -180,13 +181,20 @@ describe('POST /api/tasks', () => {
       .send({ code: 'const a = 1', language: 'javascript', reviewConfig })
 
     expect(res.status).toBe(201)
-    expect(taskService.createTask).toHaveBeenCalledWith(
-      'const a = 1',
-      'javascript',
-      undefined,
-      undefined,
-      reviewConfig
+    expect(taskService.submitReviewTask).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'const a = 1', language: 'javascript', reviewConfig }),
+      expect.any(Function)
     )
+  })
+
+  it('入队失败返回 502 QUEUE_UNAVAILABLE 且带 requestId', async () => {
+    vi.mocked(taskService.submitReviewTask).mockRejectedValue(new QueueUnavailableError())
+    const res = await request(app)
+      .post('/api/tasks')
+      .send({ code: 'const a = 1', language: 'javascript' })
+    expect(res.status).toBe(502)
+    expect(res.body.code).toBe('QUEUE_UNAVAILABLE')
+    expect(res.body.requestId).toEqual(expect.any(String))
   })
 })
 

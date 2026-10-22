@@ -9,6 +9,7 @@ import {
   verifySignature
 } from '../webhook'
 import type { GitHubClient } from '../client'
+import type { PublishTask, SubmitReviewTaskInput } from '../../../services/taskService'
 import type { ReportContent, Task, TaskSource } from '../../../../../shared/types'
 
 // 路由内部会读取 MAX_CODE_CHARS，提供最小可用配置
@@ -22,9 +23,12 @@ function sign(body: string): string {
   return `sha256=${createHmac('sha256', SECRET).update(Buffer.from(body)).digest('hex')}`
 }
 
-function buildApp(deps: Parameters<typeof createGitHubWebhookRouter>[0]) {
+function buildApp(deps: Partial<Parameters<typeof createGitHubWebhookRouter>[0]>) {
   const app = express()
-  app.use('/api/webhooks', createGitHubWebhookRouter(deps))
+  app.use(
+    '/api/webhooks',
+    createGitHubWebhookRouter({ publishTask: vi.fn(async () => undefined), ...deps })
+  )
   return app
 }
 
@@ -94,45 +98,49 @@ describe('GitHub Webhook 路由（REQ-15）', () => {
     expect(res.status).toBe(204)
   })
 
-  it('opened 事件创建任务并入队', async () => {
-    const createReviewTask = vi.fn(async () => ({ id: 'task-1' }) as Task)
+  it('opened 事件经 submitTask 创建任务并入队', async () => {
+    const submitTask = vi.fn(async () => ({ id: 'task-1' }) as Task)
     const publishTask = vi.fn(async () => undefined)
     const body = JSON.stringify(payload)
 
     const res = await post(
-      buildApp({ secret: SECRET, client: fakeClient(), createReviewTask, publishTask }),
+      buildApp({ secret: SECRET, client: fakeClient(), submitTask, publishTask }),
       body
     )
 
     expect(res.status).toBe(202)
     expect(res.body.taskId).toBe('task-1')
-    expect(publishTask).toHaveBeenCalledWith('task-1')
 
-    const call = createReviewTask.mock.calls[0] as unknown as [string, string, string, TaskSource]
-    expect(call[0]).toContain('// FILE: src/a.ts')
-    expect(call[1]).toBe('mixed')
-    expect(call[2]).toContain('PR #7')
-    expect(call[3]).toEqual({
+    const [input, publisher] = submitTask.mock.calls[0] as unknown as [
+      SubmitReviewTaskInput,
+      PublishTask
+    ]
+    // 入队函数原样交给 submitReviewTask，由它负责 agents / task_queued / 入队的完整流程
+    expect(publisher).toBe(publishTask)
+    expect(input.code).toContain('// FILE: src/a.ts')
+    expect(input.language).toBe('mixed')
+    expect(input.title).toContain('PR #7')
+    expect(input.source).toEqual({
       provider: 'github',
       repo: 'ndbf-h/code-agent-review',
       prNumber: 7,
       headSha: 'abc123'
-    })
+    } satisfies TaskSource)
   })
 
   it('没有可审查文件时返回 204 且不创建任务', async () => {
-    const createReviewTask = vi.fn(async () => ({ id: 'task-1' }) as Task)
+    const submitTask = vi.fn(async () => ({ id: 'task-1' }) as Task)
     const client = fakeClient({
       listPullRequestFiles: async () => [{ filename: 'assets/logo.png', status: 'added' }]
     })
 
     const res = await post(
-      buildApp({ secret: SECRET, client, createReviewTask }),
+      buildApp({ secret: SECRET, client, submitTask }),
       JSON.stringify(payload)
     )
 
     expect(res.status).toBe(204)
-    expect(createReviewTask).not.toHaveBeenCalled()
+    expect(submitTask).not.toHaveBeenCalled()
   })
 })
 

@@ -1,17 +1,15 @@
 import { Router, type Request, type Response, type NextFunction } from 'express'
 import { ValidationError, TaskError } from '../errors'
-import { createTask, createAgentsForTask, getTaskDetail } from '../services/taskService'
+import { submitReviewTask, getTaskDetail } from '../services/taskService'
 import {
   listTasks,
   countTasks,
   getTask,
   getTaskEventsAfter,
-  markTaskFailed,
   getReportByTask,
   getConversationMessages,
   insertConversationMessage,
   insertCodeVersion,
-  linkCodeVersionToReview,
   aggregateTaskMetrics,
   recentTaskFailures,
   getReviewCacheStats,
@@ -34,7 +32,6 @@ import {
 import type { TaskProducer } from '../queue/producer'
 import { v4 as uuidv4 } from 'uuid'
 import { getConfig } from '../config'
-import { createLogger } from '../logger'
 import { validate, getValidated } from '../validation/middleware'
 import { renderReportMarkdown } from '../export/markdown'
 import { renderSarif } from '../export/sarif'
@@ -55,8 +52,6 @@ import {
   type FixBody,
   type FetchUrlBody
 } from '../validation/schemas'
-
-const logger = createLogger('tasks')
 
 const tasksRouter = Router()
 const metricsRouter = Router()
@@ -105,35 +100,25 @@ function requireProducer(): TaskProducer {
   return taskProducer
 }
 
+/** 通过已注入的生产者入队（Webhook 等其它入口复用，保证与本路由走同一个生产者） */
+export function publishViaTaskProducer(taskId: string): Promise<void> {
+  return requireProducer().publishTask(taskId)
+}
+
 // POST /api/tasks
 tasksRouter.post(
   '/',
   validate({ body: createTaskBodySchema }),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      // reviewConfig 目前仅校验形状（REQ-04），落库并生效由 REQ-14（批次 7）实现
       const { code, language, title, scopeId, sourceVersionId, reviewConfig } =
         req.body as CreateTaskBody
 
-      const task = await createTask(code, language, title, scopeId, reviewConfig)
-      await createAgentsForTask(task.id)
-      if (sourceVersionId) await linkCodeVersionToReview(sourceVersionId, task.id)
-
-      await appendTaskEvent(task.id, { type: 'task_queued', message: '任务已创建，进入审查队列' })
-      try {
-        await requireProducer().publishTask(task.id)
-      } catch (error) {
-        // publisher confirm 失败说明 broker 未收到消息：任务标记失败并明确告知调用方
-        logger.error('任务入队失败', { taskId: task.id, error })
-        await markTaskFailed(task.id)
-        await appendTaskEvent(task.id, {
-          type: 'error',
-          message: '消息队列暂不可用，任务未能入队'
-        }).catch(() => undefined)
-        res.status(502).json({ error: '消息队列暂不可用，请稍后重试', code: 'QUEUE_UNAVAILABLE' })
-        return
-      }
-
+      // 入队失败抛 QueueUnavailableError（502 QUEUE_UNAVAILABLE），交由全局错误处理并附带 requestId
+      const task = await submitReviewTask(
+        { code, language, title, scopeId, reviewConfig, sourceVersionId },
+        publishViaTaskProducer
+      )
       res.status(201).json(task)
     } catch (error) {
       next(error)
