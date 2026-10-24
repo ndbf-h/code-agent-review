@@ -4,10 +4,54 @@
 
 ## [Unreleased]
 
+暂无。
+
+## [1.2.0] - 2026-10-24
+
+v1.1 之后的代码审查结论与优化方案（`docs/superpowers/plans/2026-10-20-post-v1.1-optimization-plan.md`），A-F 六个批次。
+
+### 破坏性变更
+
+- **LLM 默认地址随 provider 推导**：LLM 客户端改为读取 `config.ts` 校验后的配置。`LLM_BASE_URL` 留空时，`LLM_PROVIDER=anthropic` 的请求从此前误发的 `https://api.deepseek.com` 改为 `https://api.anthropic.com`，`LLM_PROVIDER=openai` 改为 `https://api.openai.com`。依赖旧默认值访问 DeepSeek 的部署请显式设置 `LLM_BASE_URL`。（优化方案 P0-5）
+
+### 变更
+
+- 配置单一真源（REQ-03，优化方案 P1-5）：嵌入/重排、Langfuse、`ROLE_MODELS` 与 `LLM_ROUTE_<别名>_*`、`MCP_CLIENT_SERVERS`、`RAG_MODE`、`EVAL_JUDGE_MODEL` 纳入 zod schema，各模块统一经 `getConfig()` 读取；`LLM_MAX_CONCURRENCY` 等非法值启动即报错，不再静默得到 `NaN`。ESLint 禁止在 `server/src` 中直接读取 `process.env`（`config.ts`、日志引导默认值、eval CLI 与测试除外）。
+- 报告评分统一取报告的综合评分（按维度加权），worker 不再另行按维度平均后落库。（优化方案批次 C）
+- 类型单一真源恢复（REQ-12，优化方案 P1-4、P2-4）：前端与 `shared/types.ts` 重复的类型改为重导出（`ReviewReport` 即 `ReportContent`），新增 `ReviewerStatus` 类型并统一 `InjectionFinding` 命名；删除无人调用的 `sseUrl()`，`withApiKey()` 收敛到 `client/src/api/http.ts`。
+- 路由结构整理（优化方案 P2-1、P2-2）：`server/src/routes/tasks.ts` 按职责拆分为 `stream.ts` / `chat.ts` / `fetch-url.ts` / `metrics.ts` 与 SSE 辅助模块 `sse.ts`；`runReviewTask` 改为选项对象入参。对外路由路径、响应与中间件顺序不变。
+
+### 修复
+
+- Webhook 创建的任务此前在未注入发布函数时只入库不入队，会一直停在 pending；现在与手动提交共用 `submitReviewTask`，入队失败时任务标记为失败，接口返回 502 `QUEUE_UNAVAILABLE`。（优化方案 P0-1）
+- 任务在收尾瞬间被取消时不再回写 PR 评论：评论改在任务确认进入 completed 之后发送，且不计入任务耗时；缓存命中路径同样如此。（优化方案 P0-2）
+- 审查配置的严重度过滤同时作用于各维度结果，按维度查看与 Markdown/SARIF 导出不再包含已过滤的问题；`maxIssues` 仍只截断最终问题清单。（优化方案 P1-2）
+- GitHub Webhook 可靠性（优化方案 P0-3、P1-3）：
+  - 签名与 payload 校验通过后立即应答 `202 { accepted, deliveryId }`，拉取文件与建任务转入后台，避免大 PR 超时重投；响应体不再包含 `taskId`。
+  - 新增迁移 `003_task_source_dedupe`（`tasks.dedupe_key` + 部分唯一索引），同一 `repo#PR@headSha` 只建一个任务、只评论一次；历史数据不受约束。
+  - 代码收集遇到超限文件改为跳过并继续，新增单文件上限 `GITHUB_MAX_FILE_CHARS`（默认 `MAX_CODE_CHARS` 的 1/4），跳过的文件写入任务标题与 `task_queued` 事件。
+  - 任务语言按扩展名推断（取变更行数最多的语言），不再固定为 `mixed`；`// FILE:` 头部标注各文件语言。
+  - 原始请求体上限改为读取 `MAX_BODY_SIZE`，不再写死 `5mb`。
+- token 预算真正生效（REQ-11，优化方案 P1-1）：此前只在 reviewer 启动时检查一次，启动后的 ReAct 循环不受约束。现在并行 reviewer 共享同一份任务级预算，ReAct 每轮调用前、结构化输出前、失败重试前都会检查；耗尽后基于已有分析给出结论，没有可用结论时降级为规则引擎。任务总用量上限约为「预算 + 在途调用」。报告 `governance` 新增 `budgetExceededAt`（首次耗尽的 reviewer 与阶段），Markdown 导出同步展示。
+
+### 安全
+
+- 报告输出与规则引擎命中片段不再包含密钥原文。脱敏范围扩展到各维度结果（`agentResults`）与注入检测片段，覆盖 PR 评论、导出与语义缓存回放。（优化方案 P0-4）
+- API Key 校验对全部配置密钥逐一比较后再汇总结果，不再命中即短路返回，规避「命中第几个密钥」的时序侧信道；README 补充反向代理需过滤 `?api_key=` 查询参数的部署说明。（优化方案 P2-6）
+
+## [1.1.1] - 2026-09-20
+
+### 变更
+
+- 依赖升级：`amqplib` 0.10.7 → 2.0.1、`pg` 8.22 → 8.23、`prettier` → 3.9.7。
+
+## [1.1.0] - 2026-09-20
+
+首个打标签的版本，汇总 v1.0.0 之后「生产级打磨」（REQ-01 到 REQ-17）的全部改动与首轮依赖升级。
+
 ### 破坏性变更
 
 - **移除明文口令回退**：`DATABASE_URL` 与 `RABBITMQ_URL` 改为必填，缺失时启动失败并一次性列出全部错误字段；此前缺失会回退到内置的连接串与口令。请检查 `.env` 后再部署。（REQ-03）
-- **LLM 默认地址随 provider 推导**：LLM 客户端改为读取 `config.ts` 校验后的配置。`LLM_BASE_URL` 留空时，`LLM_PROVIDER=anthropic` 的请求从此前误发的 `https://api.deepseek.com` 改为 `https://api.anthropic.com`，`LLM_PROVIDER=openai` 改为 `https://api.openai.com`。依赖旧默认值访问 DeepSeek 的部署请显式设置 `LLM_BASE_URL`。（优化方案 P0-5）
 
 ### 新增
 
@@ -15,7 +59,7 @@
 - GitHub Webhook 最小闭环（REQ-15）：`POST /api/webhooks/github` 校验 HMAC SHA-256 签名，PR `opened` / `synchronize` / `reopened` 时拉取变更文件（扩展名白名单 + 体积上限）创建审查任务，任务完成后把 Markdown 报告回写为 PR 评论。
 - API Key 鉴权（REQ-12）：`API_KEYS` 配置后启用，支持 `X-API-Key` 与 `Authorization: Bearer`，SSE 路径支持 `?api_key=`；前端新增统一 HTTP 客户端与「API Key 设置」入口。
 - 报告导出（REQ-13）：`GET /api/tasks/:id/report.md` 与 `/report.sarif` 导出 Markdown 与 SARIF 2.1.0，报告页提供导出按钮。
-- OpenAPI 文档（REQ-16）：`GET /api/openapi.json` 与 `GET /api/docs`（Swagger UI），请求体 schema 由 zod 校验规则直接生成。
+- OpenAPI 文档（REQ-16）：`GET /api/openapi.json` 与 `/api/docs`（Swagger UI），请求体 schema 由 zod 校验规则直接生成。
 - 提示注入防御与输出脱敏（REQ-10）：新增 `security/prompt-guard.ts`（9 条检测规则、随机 nonce 定界包裹、五类凭据脱敏），五个角色 prompt 增加防注入约束，报告新增 `security` 字段，命中时前端提示。
 - ReAct 治理（REQ-11）：相同工具与参数重复调用熔断、单次审查工具调用上限、任务级 token 预算与降级，报告新增 `governance` 字段。
 - 配置校验与健康探针（REQ-03、REQ-07）：zod 配置 schema、`/api/health/live` 与 `/api/health/ready`。
@@ -32,32 +76,16 @@
 - 依赖升级：`express` 4.21 → 5.2.1、`vite` 8.0 → 8.3、`vue-tsc` 3.2 → 3.3、`zod` 4.1 → 4.6、`tsx` 4.19 → 4.23，以及 GitHub Actions（checkout v7、setup-node v7、buildx v4、build-push v7）。
 - 前端 `axios` 调用统一收敛到 `client/src/api/http.ts`，不再在各组件拼接 `VITE_API_BASE`。
 - `vue/multi-word-component-names` 规则关闭（历史组件命名如此），如需恢复需先重命名组件。
-- 配置单一真源（REQ-03，优化方案 P1-5）：嵌入/重排、Langfuse、`ROLE_MODELS` 与 `LLM_ROUTE_<别名>_*`、`MCP_CLIENT_SERVERS`、`RAG_MODE`、`EVAL_JUDGE_MODEL` 纳入 zod schema，各模块统一经 `getConfig()` 读取；`LLM_MAX_CONCURRENCY` 等非法值启动即报错，不再静默得到 `NaN`。ESLint 禁止在 `server/src` 中直接读取 `process.env`（`config.ts`、日志引导默认值、eval CLI 与测试除外）。
-- 报告评分统一取报告的综合评分（按维度加权），worker 不再另行按维度平均后落库。
-- 类型单一真源恢复（REQ-12，优化方案 P1-4、P2-4）：前端与 `shared/types.ts` 重复的类型改为重导出（`ReviewReport` 即 `ReportContent`），新增 `ReviewerStatus` 类型并统一 `InjectionFinding` 命名；删除无人调用的 `sseUrl()`，`withApiKey()` 收敛到 `client/src/api/http.ts`。
-- 路由结构整理（优化方案 P2-1、P2-2）：`server/src/routes/tasks.ts` 按职责拆分为 `stream.ts` / `chat.ts` / `fetch-url.ts` / `metrics.ts` 与 SSE 辅助模块 `sse.ts`；`runReviewTask` 改为选项对象入参。对外路由路径、响应与中间件顺序不变。
 
 ### 修复
 
 - express 5 下 `req.params` 值类型拓宽为 `string | string[]`，`/:id` 路由显式收窄类型（`TaskIdRequest`）。
 - 语义缓存键纳入 `reviewConfig`，避免不同审查配置复用同一份报告。
-- Webhook 创建的任务此前在未注入发布函数时只入库不入队，会一直停在 pending；现在与手动提交共用 `submitReviewTask`，入队失败时任务标记为失败，接口返回 502 `QUEUE_UNAVAILABLE`。（优化方案 P0-1）
-- 任务在收尾瞬间被取消时不再回写 PR 评论：评论改在任务确认进入 completed 之后发送，且不计入任务耗时；缓存命中路径同样如此。（优化方案 P0-2）
-- 审查配置的严重度过滤同时作用于各维度结果，按维度查看与 Markdown/SARIF 导出不再包含已过滤的问题；`maxIssues` 仍只截断最终问题清单。（优化方案 P1-2）
-- GitHub Webhook 可靠性（优化方案 P0-3、P1-3）：
-  - 签名与 payload 校验通过后立即应答 `202 { accepted, deliveryId }`，拉取文件与建任务转入后台，避免大 PR 超时重投；响应体不再包含 `taskId`。
-  - 新增迁移 `003_task_source_dedupe`（`tasks.dedupe_key` + 部分唯一索引），同一 `repo#PR@headSha` 只建一个任务、只评论一次；历史数据不受约束。
-  - 代码收集遇到超限文件改为跳过并继续，新增单文件上限 `GITHUB_MAX_FILE_CHARS`（默认 `MAX_CODE_CHARS` 的 1/4），跳过的文件写入任务标题与 `task_queued` 事件。
-  - 任务语言按扩展名推断（取变更行数最多的语言），不再固定为 `mixed`；`// FILE:` 头部标注各文件语言。
-  - 原始请求体上限改为读取 `MAX_BODY_SIZE`，不再写死 `5mb`。
-- token 预算真正生效（REQ-11，优化方案 P1-1）：此前只在 reviewer 启动时检查一次，启动后的 ReAct 循环不受约束。现在并行 reviewer 共享同一份任务级预算，ReAct 每轮调用前、结构化输出前、失败重试前都会检查；耗尽后基于已有分析给出结论，没有可用结论时降级为规则引擎。任务总用量上限约为「预算 + 在途调用」。报告 `governance` 新增 `budgetExceededAt`（首次耗尽的 reviewer 与阶段），Markdown 导出同步展示。
 
 ### 安全
 
 - 移除明文口令回退（见破坏性变更）。
-- 报告输出与规则引擎命中片段不再包含密钥原文。脱敏范围扩展到各维度结果（`agentResults`）与注入检测片段，覆盖 PR 评论、导出与语义缓存回放。（优化方案 P0-4）
 - GitHub Webhook 未配置密钥时关闭端点（404）。
-- API Key 校验对全部配置密钥逐一比较后再汇总结果，不再命中即短路返回，规避「命中第几个密钥」的时序侧信道；README 补充反向代理需过滤 `?api_key=` 查询参数的部署说明。（优化方案 P2-6）
 
 ## [1.0.0] - 2026-09-14
 
