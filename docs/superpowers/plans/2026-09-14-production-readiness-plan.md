@@ -68,10 +68,11 @@
 
 ### 批次 7：对外能力二（REQ-14、REQ-15）
 
-- [ ] `ReviewConfig` 类型、schema、落库、orchestrator 维度开关 / 指令注入 / 过滤截断、缓存键
-- [ ] 前端 CodeInput 审查设置
-- [ ] `integrations/github/{client,webhook}.ts`，`POST /api/webhooks/github`，worker 完成后回写 PR 评论
+- [x] `ReviewConfig` 类型、schema、落库、orchestrator 维度开关 / 指令注入 / 过滤截断、缓存键
+- [x] 前端 CodeInput 审查设置
+- [x] `integrations/github/{client,webhook}.ts`，`POST /api/webhooks/github`，worker 完成后回写 PR 评论
 - 验收：相关单测通过；client 全量检查通过；基线通过
+- 补登记（2026-10-24）：三项均已随提交 `ff9fcc8` 合入，本节复选框与下表状态此前漏更。后续专项审查发现该批次的实现存在接缝缺陷（Webhook 建任务流程不完整、脱敏与过滤未覆盖维度结果、Webhook 同步拉取超时重投产生重复任务等），已在 `docs/superpowers/plans/2026-10-20-post-v1.1-optimization-plan.md` 立项并修复（批次 A、B、C、E）。
 
 ### 批次 8：文档收口（REQ-17）
 
@@ -91,7 +92,7 @@
 | 4 | 已完成，验收通过 | 验收"通过"附带的 3 项轻微建议（/assets/ 安全头补齐、解锁失败销毁连接、.dockerignore 保留旧规则）已修复 |
 | 5 | 已完成，验收命令通过 | REQ-10 输入隔离与脱敏、REQ-11 ReAct 治理；提交 `0807498`、`4a897cc`；验收命令 server vitest、client `vue-tsc -b` 通过 |
 | 6 | 已完成，验收命令通过 | REQ-12 鉴权与前端 HTTP 客户端、REQ-13 Markdown/SARIF 导出、REQ-16 OpenAPI 文档；提交 `819b0f7`；server `vitest run`、client `vue-tsc -b` 与 `vitest run` 通过 |
-| 7 | 待开始 | |
+| 7 | 已完成（2026-10-24 补登记） | REQ-14、REQ-15 已随 `ff9fcc8` 合入并验收；台账此前漏更。后续专项审查发现接缝缺陷，已转入 2026-10-20 优化方案修复 |
 | 8 | 已完成，验收命令通过 | REQ-17 文档收口：`SECURITY.md`、`CHANGELOG.md` 新建，`CONTRIBUTING.md` 补环境要求与 PR 检查清单，README 增补六类能力说明与 CI 徽章，`docs/optimization-log.md` 登记本轮；全量 lint / typecheck / test / build 通过 |
 
 ### 批次外任务登记（2026-09-14 晚）

@@ -366,3 +366,15 @@
 | 6 | 对外能力一 | REQ-12、REQ-13、REQ-16 | server `vitest run`、client `vue-tsc -b` 与 `vitest run` |
 | 7 | 对外能力二 | REQ-14、REQ-15 | server `vitest run`、client 全量检查 |
 | 8 | 文档收口 | REQ-17 + README / `.env.example` / `docs/optimization-log.md` 更新 | 文件存在与内容检查、全量 lint / typecheck / test / build |
+
+## 八、范围变更记录
+
+第四节约束「不迁移框架、不重写编排核心、不引入新的基础设施组件」。执行期间发生以下超出原文字面约束的依赖大版本变更，特此登记原因与验证结果：
+
+| 变更 | 原因 | 验证 |
+| --- | --- | --- |
+| `express` 4.21 → 5.2.1（含 `@types/express` 4 → 5） | express 4 已停止常规维护，express 5 为当前主版本；迁移面集中在 `req.params` 值类型拓宽为 `string \| string[]` 后的显式收窄与 `express.raw` 行为确认 | `/:id` 路由统一 `TaskIdRequest` 收窄；全量 lint / typecheck / test / build 通过，CI（run #42、#47）通过 |
+| `amqplib` 0.10.7 → 2.0.1 | 官方大版本跟进，保持 broker 客户端可获得安全修复 | server 全量单测（会话重连 / 生产者 / 消费者均以依赖注入 mock）通过 |
+| `pg` 8.22 → 8.23、`zod` 4.1 → 4.6、`vite` 8.0 → 8.3、`vue-tsc` 3.2 → 3.3、`vitest`（server）4 → 5，以及 `markdown-it`、`element-plus`、`jsdom`、`pino` 等大版本跟进（2026-09-20 批次） | Dependabot 周期升级，含安全修复 | 合并前逐项跑通 `CONTRIBUTING.md` 第五节验证清单 |
+
+「不迁移框架」的本意是不更换技术栈（如 Express 换 Fastify、自研 ReAct 换编排框架）与不新增基础设施组件（Redis、K8s 等）；依赖库在其自身主版本内的升级不视为违背该约束。所有升级均按 `CONTRIBUTING.md` 第六节流程执行（Dependabot PR + 本地验证清单 + major 版本破坏性变更确认），未引入任何新的基础设施组件。
