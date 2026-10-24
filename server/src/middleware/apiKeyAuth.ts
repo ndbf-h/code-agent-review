@@ -10,7 +10,8 @@ const logger = createLogger('auth')
  * - `API_KEYS` 为空表示不鉴权（保持向后兼容），生产环境未配置时启动告警；
  * - 支持 `X-API-Key` 与 `Authorization: Bearer <key>` 两种携带方式；
  * - SSE 场景 EventSource 无法自定义请求头，仅 stream 路径额外接受 `?api_key=`；
- * - 密钥比较采用恒定时间算法（先 SHA-256 再 timingSafeEqual），规避长度与时序侧信道。
+ * - 密钥比较采用恒定时间算法（先 SHA-256 再 timingSafeEqual），并对全部密钥逐一比较后汇总，
+ *   规避长度、时序与「命中第几个密钥」的侧信道。
  */
 
 /** 无需鉴权的路径：健康探针、接口文档、Webhook（后者自行做 HMAC 校验） */
@@ -32,9 +33,18 @@ function digest(value: string): Buffer {
   return createHash('sha256').update(value).digest()
 }
 
+/**
+ * 对全部密钥逐一比较后再汇总结果。
+ * 不能用 `some` 短路：命中即返回会通过比较次数泄露命中的是第几个密钥。
+ */
 function matchesAny(provided: string, keys: string[]): boolean {
   const providedDigest = digest(provided)
-  return keys.some(key => timingSafeEqual(providedDigest, digest(key)))
+  let matched = false
+  for (const key of keys) {
+    // 先执行比较再短路，保证每次请求的比较次数与配置的密钥数一致
+    matched = timingSafeEqual(providedDigest, digest(key)) || matched
+  }
+  return matched
 }
 
 function isPublicPath(path: string): boolean {

@@ -60,6 +60,15 @@ describe('createApiKeyAuth（REQ-12）', () => {
     expect(res.status).toBe(401)
   })
 
+  it('多密钥配置时任一密钥均可放行，比较不因命中而短路', async () => {
+    const app = buildApp(['key-a', 'key-b', 'key-c'])
+    expect((await request(app).get('/api/tasks').set('X-API-Key', 'key-a')).status).toBe(200)
+    expect((await request(app).get('/api/tasks').set('X-API-Key', 'key-b')).status).toBe(200)
+    expect((await request(app).get('/api/tasks').set('X-API-Key', 'key-c')).status).toBe(200)
+    // 任何位置上的错误密钥一律 401
+    expect((await request(app).get('/api/tasks').set('X-API-Key', 'key-x')).status).toBe(401)
+  })
+
   it('白名单路径无需鉴权', async () => {
     const app = buildApp(['secret-key'])
     expect((await request(app).get('/api/health/live')).status).toBe(200)
