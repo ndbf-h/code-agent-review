@@ -57,7 +57,12 @@ export async function runReviewSuite(options: ReviewSuiteOptions): Promise<Revie
     const startedAt = Date.now()
     process.stdout.write(`[${i + 1}/${samples.length}] ${sample.id} (${sample.tier}) 运行中... `)
     try {
-      const report = await runReviewTask(taskId, sample.code, sample.language, () => undefined)
+      const report = await runReviewTask({
+        taskId,
+        code: sample.code,
+        language: sample.language,
+        onEvent: () => undefined
+      })
       const agentIssues: Partial<Record<Dimension, ReportIssueLike[]>> = {}
       for (const [dimension, result] of Object.entries(report.agentResults || {})) {
         agentIssues[dimension as Dimension] = (result.issues || []).map(issue => ({

@@ -301,15 +301,15 @@ export async function runClaimedTask(
   try {
     // 全链路追踪上下文贯穿 runReviewTask → reviewer → llm-client，同时精确累计该任务的 token 用量
     const traced = await withTaskTrace({ taskId, attempt: priorAttempts + 1 }, async () => {
-      const reportContent = await runReviewTask(
+      const reportContent = await runReviewTask({
         taskId,
-        task.codeSnippet,
-        task.language,
-        event => sink.push(event),
-        task.scopeId,
-        abortController.signal,
-        task.reviewConfig
-      )
+        code: task.codeSnippet,
+        language: task.language,
+        onEvent: event => sink.push(event),
+        scopeId: task.scopeId,
+        signal: abortController.signal,
+        reviewConfig: task.reviewConfig
+      })
       // 报告评分即综合评分（与缓存、导出口径一致），不再在此按维度重新平均
       await saveReport(taskId, reportContent, reportContent.score)
       return reportContent

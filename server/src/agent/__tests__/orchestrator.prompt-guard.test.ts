@@ -43,7 +43,12 @@ vi.mock('../llm-client', async importOriginal => {
 describe('runReviewTask 输入隔离（REQ-10）', () => {
   it('发给 LLM 的内容包含定界标签包裹的代码', async () => {
     mocks.captured.length = 0
-    await runReviewTask('task-guard-1', 'const total = 1 + 1', 'javascript', () => undefined)
+    await runReviewTask({
+      taskId: 'task-guard-1',
+      code: 'const total = 1 + 1',
+      language: 'javascript',
+      onEvent: () => undefined
+    })
 
     const outbound = mocks.captured.flat().map(message => message.content)
     expect(outbound.length).toBeGreaterThan(0)
@@ -58,8 +63,13 @@ describe('runReviewTask 输入隔离（REQ-10）', () => {
       '\n'
     )
     const events: Array<{ type: string; message?: string }> = []
-    const report = await runReviewTask('task-guard-2', code, 'javascript', event => {
-      events.push({ type: event.type, message: event.message })
+    const report = await runReviewTask({
+      taskId: 'task-guard-2',
+      code,
+      language: 'javascript',
+      onEvent: event => {
+        events.push({ type: event.type, message: event.message })
+      }
     })
 
     expect(report.security?.injectionSuspected).toBe(true)
@@ -70,12 +80,12 @@ describe('runReviewTask 输入隔离（REQ-10）', () => {
   })
 
   it('未命中注入规则时不写 security 字段', async () => {
-    const report = await runReviewTask(
-      'task-guard-3',
-      'function add(a, b) { return a + b }',
-      'javascript',
-      () => undefined
-    )
+    const report = await runReviewTask({
+      taskId: 'task-guard-3',
+      code: 'function add(a, b) { return a + b }',
+      language: 'javascript',
+      onEvent: () => undefined
+    })
     expect(report.security).toBeUndefined()
   })
 })
