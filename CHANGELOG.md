@@ -4,7 +4,9 @@
 
 ## [Unreleased]
 
-暂无。
+### 变更
+
+- 依赖升级（Dependabot 批量合并）：根目录 `eslint` → 10.11.0、`eslint-plugin-vue` → 10.11.1、`globals` → 17.13.0、`prettier` → 3.9.9、`typescript-eslint` → 8.71.0；server `typescript` 5.5 → 7.0（大版本，`tsc` 构建与全量测试验证通过）、`dotenv` 17 → 18（仅 `import 'dotenv/config'`，无 API 变化）、`acorn` → 8.18.0、`@types/node` → 26.6.1、`zod` → 4.6.5；client `vue-router` 4 → 5.3（大版本，仅使用 `createRouter` / `useRoute` / `useRouter` 等稳定 API）、`vitest` 4 → 5（大版本）、`vue` → 3.5.44（满足 vue-router 5 的 peer 要求）、`axios` → 1.20.0、`highlight.js` → 11.12.0、`@vue/test-utils` → 2.5.1。
 
 ## [1.2.0] - 2026-10-24
 
