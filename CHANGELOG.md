@@ -34,6 +34,8 @@
 - `vue/multi-word-component-names` 规则关闭（历史组件命名如此），如需恢复需先重命名组件。
 - 配置单一真源（REQ-03，优化方案 P1-5）：嵌入/重排、Langfuse、`ROLE_MODELS` 与 `LLM_ROUTE_<别名>_*`、`MCP_CLIENT_SERVERS`、`RAG_MODE`、`EVAL_JUDGE_MODEL` 纳入 zod schema，各模块统一经 `getConfig()` 读取；`LLM_MAX_CONCURRENCY` 等非法值启动即报错，不再静默得到 `NaN`。ESLint 禁止在 `server/src` 中直接读取 `process.env`（`config.ts`、日志引导默认值、eval CLI 与测试除外）。
 - 报告评分统一取报告的综合评分（按维度加权），worker 不再另行按维度平均后落库。
+- 类型单一真源恢复（REQ-12，优化方案 P1-4、P2-4）：前端与 `shared/types.ts` 重复的类型改为重导出（`ReviewReport` 即 `ReportContent`），新增 `ReviewerStatus` 类型并统一 `InjectionFinding` 命名；删除无人调用的 `sseUrl()`，`withApiKey()` 收敛到 `client/src/api/http.ts`。
+- 路由结构整理（优化方案 P2-1、P2-2）：`server/src/routes/tasks.ts` 按职责拆分为 `stream.ts` / `chat.ts` / `fetch-url.ts` / `metrics.ts` 与 SSE 辅助模块 `sse.ts`；`runReviewTask` 改为选项对象入参。对外路由路径、响应与中间件顺序不变。
 
 ### 修复
 
@@ -55,6 +57,7 @@
 - 移除明文口令回退（见破坏性变更）。
 - 报告输出与规则引擎命中片段不再包含密钥原文。脱敏范围扩展到各维度结果（`agentResults`）与注入检测片段，覆盖 PR 评论、导出与语义缓存回放。（优化方案 P0-4）
 - GitHub Webhook 未配置密钥时关闭端点（404）。
+- API Key 校验对全部配置密钥逐一比较后再汇总结果，不再命中即短路返回，规避「命中第几个密钥」的时序侧信道；README 补充反向代理需过滤 `?api_key=` 查询参数的部署说明。（优化方案 P2-6）
 
 ## [1.0.0] - 2026-09-14
 
