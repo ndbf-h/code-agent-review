@@ -321,6 +321,8 @@ curl -H "Authorization: Bearer <key>" http://localhost:3001/api/tasks
 
 SSE 的 `GET /api/tasks/:id/stream` 与 `POST /api/tasks/:id/chat/stream` 额外接受 `?api_key=<key>`（`EventSource` 无法自定义请求头），`/mcp` 同样受保护。前端侧边栏底部的「API Key 设置」会把密钥存入 localStorage 并自动附带；服务端返回 401 时会提示配置。
 
+> 反向代理注意：`?api_key=` 查询参数会随 URL 进入代理访问日志。生产部署时请在代理层过滤该参数（如 nginx 对 SSE 路径设置 `proxy_pass` 前重写 `args`，或关闭相应 location 的 `access_log`），避免密钥落盘。
+
 `API_KEYS` 为空表示不鉴权（保持向后兼容）；`NODE_ENV=production` 且未配置时启动会打印 WARN。
 
 ### 请求级审查配置
