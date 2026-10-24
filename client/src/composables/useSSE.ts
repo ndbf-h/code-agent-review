@@ -1,17 +1,10 @@
 import { useReviewStore } from '../stores/review'
-import { API_BASE, authHeaders, getApiKey } from '../api/http'
+import { API_BASE, authHeaders, withApiKey } from '../api/http'
 import type { AgentRole, ReviewReport, TaskStatus } from '../types/index'
 
 const MAX_RECONNECT_ATTEMPTS = 8
 const RECONNECT_BASE_DELAY_MS = 2_000
 const RECONNECT_MAX_DELAY_MS = 30_000
-
-/** EventSource 无法自定义请求头，密钥通过查询参数传递 */
-function withApiKey(url: string): string {
-  const key = getApiKey()
-  if (!key) return url
-  return `${url}${url.includes('?') ? '&' : '?'}api_key=${encodeURIComponent(key)}`
-}
 
 function normalizeReport(data: Record<string, unknown>): ReviewReport {
   return {

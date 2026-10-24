@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { runReActLoop, type ToolCallGuard } from '../react-loop'
+import { runReActLoop, BUDGET_EXCEEDED_NOTE, type ToolCallGuard } from '../react-loop'
 import { toolRegistry } from '../tool-registry'
 import { Memory } from '../memory'
 import type { ToolDefinition } from '../types'
@@ -92,6 +92,96 @@ describe('runReActLoop 工具治理（REQ-11）', () => {
 
     expect(result).toContain('已分析完成')
     expect(execute).not.toHaveBeenCalled()
+
+    execute.mockRestore()
+  })
+})
+
+describe('runReActLoop token 预算（REQ-11 / 批次 E）', () => {
+  /** 每次 LLM 调用固定消耗 tokensPerCall，预算按累计用量判断（模拟 tracing 计数器） */
+  function meteredClient(tokensPerCall: number) {
+    const usage = { total: 0, streamCalls: 0, summaryCalls: 0 }
+    const client = {
+      async *chatStream() {
+        usage.streamCalls += 1
+        usage.total += tokensPerCall
+        yield {
+          type: 'tool_use',
+          id: `call-${usage.streamCalls}`,
+          name: 'checkPattern',
+          input: { index: usage.streamCalls }
+        }
+        yield { type: 'text', content: `第 ${usage.streamCalls} 轮分析` }
+        yield { type: 'done' }
+      },
+      async chatWithRetry() {
+        usage.summaryCalls += 1
+        usage.total += tokensPerCall
+        return { content: '{"issues":[],"score":80}', finishReason: 'stop', toolCalls: [] }
+      }
+    }
+    return { client, usage }
+  }
+
+  it('累计用量达到预算后，在下一轮调用前停止且不再强制总结', async () => {
+    const execute = vi.spyOn(toolRegistry, 'execute').mockResolvedValue('{"ok":true}')
+    const { client, usage } = meteredClient(100)
+    const budget = { isExceeded: () => usage.total >= 250 }
+    const onBudgetExceeded = vi.fn()
+
+    const result = await runReActLoop('system', tools, new Memory(), undefined, {
+      client: client as never,
+      budget,
+      onBudgetExceeded
+    })
+
+    // 第 1、2、3 轮调用后累计 300 ≥ 250，第 4 轮调用前停止
+    expect(usage.streamCalls).toBe(3)
+    expect(usage.summaryCalls).toBe(0)
+    expect(onBudgetExceeded).toHaveBeenCalledWith(4)
+    expect(result.startsWith(BUDGET_EXCEEDED_NOTE)).toBe(true)
+    expect(result).toContain('第 3 轮分析')
+
+    execute.mockRestore()
+  })
+
+  it('总用量不超过「预算 + 单次调用用量」', async () => {
+    const execute = vi.spyOn(toolRegistry, 'execute').mockResolvedValue('{"ok":true}')
+    const { client, usage } = meteredClient(70)
+    const limit = 200
+
+    await runReActLoop('system', tools, new Memory(), undefined, {
+      client: client as never,
+      budget: { isExceeded: () => usage.total >= limit }
+    })
+
+    expect(usage.total).toBeLessThanOrEqual(limit + 70)
+
+    execute.mockRestore()
+  })
+
+  it('预算从一开始就耗尽时不发起任何 LLM 调用', async () => {
+    const { client, usage } = meteredClient(100)
+    const result = await runReActLoop('system', tools, new Memory(), undefined, {
+      client: client as never,
+      budget: { isExceeded: () => true }
+    })
+    expect(usage.streamCalls + usage.summaryCalls).toBe(0)
+    expect(result.startsWith(BUDGET_EXCEEDED_NOTE)).toBe(true)
+  })
+
+  it('预算未耗尽时行为不变（跑满轮数后强制总结）', async () => {
+    const execute = vi.spyOn(toolRegistry, 'execute').mockResolvedValue('{"ok":true}')
+    const { client, usage } = meteredClient(1)
+
+    const result = await runReActLoop('system', tools, new Memory(), undefined, {
+      client: client as never,
+      budget: { isExceeded: () => false }
+    })
+
+    expect(usage.streamCalls).toBe(10)
+    expect(usage.summaryCalls).toBe(1)
+    expect(result).toContain('issues')
 
     execute.mockRestore()
   })

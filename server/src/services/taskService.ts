@@ -1,5 +1,7 @@
 import { v4 as uuidv4 } from 'uuid'
 import { getConfig } from '../config'
+import { DuplicateTaskError, QueueUnavailableError } from '../errors'
+import { createLogger } from '../logger'
 import type {
   Task,
   Agent,
@@ -17,33 +19,57 @@ import {
   insertReport,
   getReportByTask,
   getMessagesByTask,
-  getAgentsByTask
+  getAgentsByTask,
+  linkCodeVersionToReview,
+  markTaskFailed
 } from '../db/queries'
+import { appendTaskEvent } from './eventService'
 
-async function createTask(
-  code: string,
-  language: string,
-  title?: string,
-  scopeId?: string,
-  reviewConfig?: ReviewConfig,
+const logger = createLogger('task-service')
+
+/** 创建审查任务的输入（取代原先 6 个位置参数） */
+export interface CreateTaskInput {
+  code: string
+  language: string
+  title?: string
+  scopeId?: string
+  reviewConfig?: ReviewConfig
   source?: TaskSource
-): Promise<Task> {
+  /**
+   * 外部来源的去重键（如 GitHub `repo#pr@headSha`）。已有同键任务时不再创建，
+   * createTask 返回 null、submitReviewTask 抛出 DuplicateTaskError。
+   */
+  dedupeKey?: string
+}
+
+/** 提交审查任务的输入：在创建任务之外，可关联一个由助手生成的代码版本 */
+export interface SubmitReviewTaskInput extends CreateTaskInput {
+  sourceVersionId?: string
+  /** 附加到 task_queued 事件的说明（如 Webhook 跳过的文件），让使用者知道实际审查范围 */
+  queueNotice?: string
+}
+
+/** 把任务投递到队列（生产环境为 RabbitMQ 生产者，单测注入 mock） */
+export type PublishTask = (taskId: string) => Promise<void>
+
+/** 创建任务；带 dedupeKey 且与已有任务冲突时返回 null */
+async function createTask(input: CreateTaskInput): Promise<Task | null> {
   const id = uuidv4()
   const task: Task = {
     id,
-    title: title || `Code Review - ${new Date().toLocaleString()}`,
-    codeSnippet: code,
-    language,
-    scopeId: scopeId || id,
+    title: input.title || `Code Review - ${new Date().toLocaleString()}`,
+    codeSnippet: input.code,
+    language: input.language,
+    scopeId: input.scopeId || id,
     status: 'pending',
     createdAt: new Date().toISOString()
   }
   // 仅在有值时写入，避免把 undefined 变成 JSON 里的 null 字段
-  if (reviewConfig) task.reviewConfig = reviewConfig
-  if (source) task.source = source
+  if (input.reviewConfig) task.reviewConfig = input.reviewConfig
+  if (input.source) task.source = input.source
 
-  await insertTask(task)
-  return task
+  const inserted = await insertTask(task, input.dedupeKey)
+  return inserted ? task : null
 }
 
 async function createAgentsForTask(taskId: string): Promise<void> {
@@ -61,6 +87,45 @@ async function createAgentsForTask(taskId: string): Promise<void> {
     }
     await insertAgent(agent)
   }
+}
+
+/**
+ * 提交一个审查任务：创建任务 → 创建 agents → 关联代码版本 → 写 task_queued 事件 → 入队。
+ *
+ * 所有入口（`POST /api/tasks`、GitHub Webhook）都必须走这里，保证任务在库内的形态一致：
+ * messages / tool_calls 外键引用 agents，缺少 agents 行会导致审查对话无法落库。
+ *
+ * 入队失败时任务标记为 failed 并写入 error 事件，然后抛出 {@link QueueUnavailableError}，
+ * 由调用方决定如何响应（HTTP 路由映射为 502）。带 dedupeKey 的重复提交抛出 {@link DuplicateTaskError}，
+ * 此时不创建 agents、不写事件、不入队。
+ */
+async function submitReviewTask(
+  input: SubmitReviewTaskInput,
+  publishTask: PublishTask
+): Promise<Task> {
+  const { sourceVersionId, queueNotice, ...createInput } = input
+  const task = await createTask(createInput)
+  if (!task) throw new DuplicateTaskError(input.dedupeKey ?? '')
+  await createAgentsForTask(task.id)
+  if (sourceVersionId) await linkCodeVersionToReview(sourceVersionId, task.id)
+
+  const queuedMessage = queueNotice
+    ? `任务已创建，进入审查队列。${queueNotice}`
+    : '任务已创建，进入审查队列'
+  await appendTaskEvent(task.id, { type: 'task_queued', message: queuedMessage })
+  try {
+    await publishTask(task.id)
+  } catch (error) {
+    // publisher confirm 失败说明 broker 未收到消息：任务标记失败并明确告知调用方
+    logger.error('任务入队失败', { taskId: task.id, error })
+    await markTaskFailed(task.id)
+    await appendTaskEvent(task.id, {
+      type: 'error',
+      message: '消息队列暂不可用，任务未能入队'
+    }).catch(() => undefined)
+    throw new QueueUnavailableError()
+  }
+  return task
 }
 
 async function saveReport(
@@ -100,4 +165,11 @@ async function getTaskDetail(taskId: string): Promise<{
   return { task, agents, messages, report: reportData }
 }
 
-export { createTask, createAgentsForTask, saveReport, getTaskDetail, updateTaskStatus }
+export {
+  createTask,
+  createAgentsForTask,
+  submitReviewTask,
+  saveReport,
+  getTaskDetail,
+  updateTaskStatus
+}

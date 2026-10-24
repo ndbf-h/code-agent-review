@@ -49,6 +49,14 @@ interface PendingToolCall {
   input: Record<string, unknown>
 }
 
+/** 任务级 token 预算的最小接口（{@link import('./budget').TaskBudget} 实现了它），便于单测注入 */
+export interface BudgetCheck {
+  isExceeded(): boolean
+}
+
+/** 预算耗尽时返回给调用方的分析文本前缀，调用方据此跳过后续 LLM 调用 */
+export const BUDGET_EXCEEDED_NOTE = '[token 预算已耗尽，基于已有分析结束]'
+
 /**
  * 运行 ReAct 推理循环
  * @param systemPrompt - 系统提示词
@@ -68,6 +76,13 @@ export async function runReActLoop(
     signal?: AbortSignal
     /** REQ-11 治理计数器；缺省表示不做熔断与上限控制 */
     guard?: ToolCallGuard
+    /**
+     * 任务级 token 预算（并行 reviewer 共享同一个对象，用量为任务累计值）。
+     * 每轮发起 LLM 调用前检查，耗尽即停止循环、不再发起任何 LLM 调用。
+     */
+    budget?: BudgetCheck
+    /** 预算在第 round 轮（从 1 开始）调用前被发现耗尽时回调 */
+    onBudgetExceeded?: (round: number) => void
   } = {}
 ): Promise<string> {
   // 按角色路由的 LLM 客户端（缺省用全局单例，行为与路由开启前一致）
@@ -77,7 +92,17 @@ export async function runReActLoop(
   const guard = options.guard
   const seenCalls = new Map<string, number>()
   let toolCallLimitReached = false
+  /** 最近一次 assistant 输出：预算耗尽时作为「已有分析结果」返回 */
+  let lastAssistantContent = ''
   memory.add({ role: 'system', content: systemPrompt })
+
+  /** 预算耗尽：通知调用方并返回已有分析，不再调用 LLM */
+  const stopForBudget = (round: number): string => {
+    logger.warn('任务 token 预算耗尽，停止 ReAct 循环', { round })
+    options.onBudgetExceeded?.(round)
+    if (onStep) onStep('thought', '任务 token 预算已耗尽，停止继续分析，基于已有结果给出结论。')
+    return `${BUDGET_EXCEEDED_NOTE}\n${lastAssistantContent}`
+  }
 
   /** 工具调用数是否已达上限 */
   const toolBudgetReached = (): boolean =>
@@ -142,6 +167,9 @@ export async function runReActLoop(
     if (signal?.aborted) {
       throw new Error('任务已取消')
     }
+    if (options.budget?.isExceeded()) {
+      return stopForBudget(round + 1)
+    }
     const context = memory.getContext()
     logger.debug(`Round ${round + 1}/${MAX_ROUNDS}`, { contextLen: context.length })
 
@@ -170,6 +198,7 @@ export async function runReActLoop(
       }
 
       // 处理完成后的逻辑
+      if (fullContent) lastAssistantContent = fullContent
       if (pendingToolCalls.length > 0) {
         // 有工具调用 — 记录 assistant 消息
         memory.add({
@@ -214,6 +243,7 @@ export async function runReActLoop(
     } else {
       // ── 非流式路径（兼容旧逻辑）──
       const response = await llm.chatWithRetry(context, tools, { signal })
+      if (response.content) lastAssistantContent = response.content
 
       if (response.finishReason === 'stop') {
         memory.add({ role: 'assistant', content: response.content })
@@ -254,7 +284,10 @@ export async function runReActLoop(
     }
   }
 
-  // 达到最大轮数 — 强制总结
+  // 达到最大轮数 — 强制总结（预算已耗尽时不再发起这次调用）
+  if (options.budget?.isExceeded()) {
+    return stopForBudget(MAX_ROUNDS + 1)
+  }
   logger.warn('Max rounds reached, forcing summary')
   memory.add({
     role: 'user',

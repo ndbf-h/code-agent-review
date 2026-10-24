@@ -48,6 +48,20 @@ export class TaskError extends AppError {
   }
 }
 
+/** 消息队列不可用：任务已落库但未能入队（已标记失败） */
+export class QueueUnavailableError extends AppError {
+  constructor(message = '消息队列暂不可用，请稍后重试') {
+    super(message, 'QUEUE_UNAVAILABLE', 502)
+  }
+}
+
+/** 外部来源的重复投递：同一去重键已有任务，本次未创建 */
+export class DuplicateTaskError extends AppError {
+  constructor(public readonly dedupeKey: string) {
+    super('相同来源的审查任务已存在', 'DUPLICATE_TASK', 409)
+  }
+}
+
 /** 输入验证错误 */
 export class ValidationError extends AppError {
   constructor(message: string, details?: unknown) {

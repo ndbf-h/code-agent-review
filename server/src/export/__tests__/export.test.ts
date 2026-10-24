@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { renderReportMarkdown } from '../markdown'
 import { languageExtension, renderSarif } from '../sarif'
+import { finalizeReport } from '../../agent/report-postprocess'
 import type { ReportContent, Task } from '../../../../shared/types'
 
 const task: Task = {
@@ -79,6 +80,33 @@ describe('renderReportMarkdown（REQ-13）', () => {
   it('空问题列表输出"未发现问题"', () => {
     const md = renderReportMarkdown(task, { issues: [], score: 100, agentResults: {} })
     expect(md).toContain('未发现问题。')
+  })
+
+  it('经 finalizeReport 处理后，各维度发现中不含密钥原文（PR 评论同源）', () => {
+    const aws = 'AKIAABCDEFGHIJKLMNOP'
+    const gh = 'ghp_abcdefghijklmnopqrstuvwxyz0123456789'
+    const leaky: ReportContent = {
+      issues: [],
+      score: 40,
+      agentResults: {
+        security: {
+          score: 40,
+          issues: [
+            {
+              line: 1,
+              severity: 'critical',
+              category: '硬编码密钥',
+              message: `发现 ${aws}`,
+              suggestion: `移除 ${gh}`
+            }
+          ]
+        }
+      }
+    }
+    const md = renderReportMarkdown(task, finalizeReport(leaky))
+    expect(md).toContain('## 各维度发现')
+    expect(md).not.toContain(aws)
+    expect(md).not.toContain(gh)
   })
 })
 

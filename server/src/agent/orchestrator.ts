@@ -1,6 +1,6 @@
 import { Memory } from './memory'
-import { runReActLoop, type ToolCallGuard } from './react-loop'
-import { createTaskBudget } from './budget'
+import { runReActLoop, BUDGET_EXCEEDED_NOTE, type ToolCallGuard } from './react-loop'
+import { createTaskBudget, type TaskBudget } from './budget'
 import { getConfig } from '../config'
 import { getRolePrompt } from './roles/index'
 import { toolRegistry } from './tool-registry'
@@ -9,7 +9,8 @@ import { getRulesByDimension, scanCode } from '../tools/rules'
 import { createLogger } from '../logger'
 import { createInsertMessageFn } from './persistence'
 import { withReviewerSpan } from '../observability/tracing'
-import { detectInjection, redactSecrets, wrapUntrustedCode } from '../security/prompt-guard'
+import { detectInjection, wrapUntrustedCode } from '../security/prompt-guard'
+import { applyReviewConfig, finalizeReport } from './report-postprocess'
 import type {
   AgentRole,
   ReportContent,
@@ -89,6 +90,33 @@ interface ReviewerResult {
   method: 'llm' | 'rule-fallback'
 }
 
+/** 预算耗尽位置（写入报告 governance.budgetExceededAt） */
+type BudgetStop = NonNullable<NonNullable<ReportContent['governance']>['budgetExceededAt']>
+
+/** reviewer 共享的任务级预算及「首次耗尽位置」记录器 */
+interface ReviewerBudget {
+  budget: TaskBudget
+  /** 记录耗尽位置；只保留第一次 */
+  markExceeded(stop: BudgetStop): void
+}
+
+/** 从 ReAct 输出中解析 issues/score；无法解析时返回空结果 */
+function parseLooseReviewResult(result: string): { issues: Issue[]; score: number } {
+  let parsed: { issues: Issue[]; score: number } = { issues: [], score: 0 }
+  try {
+    let jsonStr = result
+    const fenceMatch = result.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/)
+    if (fenceMatch) jsonStr = fenceMatch[1]
+    const jsonMatch = jsonStr.match(/\{[\s\S]*\}/)
+    if (jsonMatch) parsed = JSON.parse(jsonMatch[0])
+    if (!Array.isArray(parsed.issues)) parsed.issues = []
+    if (typeof parsed.score !== 'number') parsed.score = 0
+  } catch {
+    parsed = { issues: [], score: 0 }
+  }
+  return parsed
+}
+
 /** Run a single reviewer with the given role and context */
 async function runReviewer(
   role: AgentRole,
@@ -100,7 +128,8 @@ async function runReviewer(
   onEvent: (event: ReviewEvent) => void,
   scopeId?: string,
   signal?: AbortSignal,
-  guard?: ToolCallGuard
+  guard?: ToolCallGuard,
+  reviewerBudget?: ReviewerBudget
 ): Promise<ReviewerResult> {
   const reviewerId = `${role}-${taskId}`
   if (signal?.aborted) {
@@ -168,6 +197,14 @@ async function runReviewer(
   })
 
   const maxReActAttempts = 3 // 1 initial + 2 retries
+  // REQ-11：ReAct 每轮调用前检查共享预算，耗尽时记录位置
+  const reactBudgetOptions = reviewerBudget
+    ? {
+        budget: reviewerBudget.budget,
+        onBudgetExceeded: (round: number) =>
+          reviewerBudget.markExceeded({ role, stage: 'react', round })
+      }
+    : {}
 
   for (let attempt = 0; attempt < maxReActAttempts; attempt++) {
     try {
@@ -214,7 +251,7 @@ async function runReviewer(
             })
           }
         },
-        { stream: true, client: getClientForRole(role), signal, guard }
+        { stream: true, client: getClientForRole(role), signal, guard, ...reactBudgetOptions }
       )
 
       if (attempt > 0) {
@@ -226,6 +263,24 @@ async function runReviewer(
         await mem.persist(insertMessageFn)
       } catch (err) {
         logger.error('审查员对话持久化失败', { role, taskId, error: err })
+      }
+
+      // REQ-11：预算已耗尽（ReAct 中途停止，或其他 reviewer 用完了共享额度）时跳过结构化输出调用，
+      // 只用已有分析结果；连可解析的结论都没有时降级为规则引擎
+      const stoppedByBudget = result.startsWith(BUDGET_EXCEEDED_NOTE)
+      if (stoppedByBudget || reviewerBudget?.budget.isExceeded()) {
+        if (!stoppedByBudget) reviewerBudget?.markExceeded({ role, stage: 'structured' })
+        const partial = parseLooseReviewResult(result)
+        if (partial.issues.length > 0 || partial.score > 0) {
+          onEvent({
+            type: 'agent_done',
+            agentId: reviewerId,
+            role,
+            message: `${role} 审查完成（预算耗尽，基于已有分析，${partial.issues.length} 个问题）`
+          })
+          return { ...partial, method: 'llm' as const }
+        }
+        return budgetFallback(role, reviewerId, code, language, onEvent)
       }
 
       // Structured output parsing
@@ -258,18 +313,7 @@ async function runReviewer(
         return { ...structured, method: 'llm' as const }
       } catch {
         // Fallback: regex JSON extraction from raw result
-        let parsed: { issues: Issue[]; score: number } = { issues: [], score: 0 }
-        try {
-          let jsonStr = result
-          const fenceMatch = result.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/)
-          if (fenceMatch) jsonStr = fenceMatch[1]
-          const jsonMatch = jsonStr.match(/\{[\s\S]*\}/)
-          if (jsonMatch) parsed = JSON.parse(jsonMatch[0])
-          if (!parsed.issues) parsed.issues = []
-          if (typeof parsed.score !== 'number') parsed.score = 0
-        } catch {
-          // Final fallback: empty result
-        }
+        const parsed = parseLooseReviewResult(result)
         onEvent({
           type: 'agent_done',
           agentId: reviewerId,
@@ -302,6 +346,12 @@ async function runReviewer(
           toolCalls: guard.toolCalls
         })
         break
+      }
+
+      // REQ-11：预算已耗尽时重试只会继续消耗，直接降级
+      if (reviewerBudget?.budget.isExceeded()) {
+        reviewerBudget.markExceeded({ role, stage: 'react' })
+        return budgetFallback(role, reviewerId, code, language, onEvent)
       }
 
       // 还有重试机会，继续循环
@@ -340,6 +390,30 @@ async function runReviewer(
     onEvent({ type: 'error', agentId: reviewerId, role, message: errorMsg })
     return { issues: [], score: 0, method: 'rule-fallback' as const }
   }
+}
+
+/** 预算耗尽时的降级：规则引擎完成该维度审查（不调用 LLM） */
+function budgetFallback(
+  role: AgentRole,
+  reviewerId: string,
+  code: string,
+  language: string,
+  onEvent: (event: ReviewEvent) => void
+): ReviewerResult {
+  onEvent({
+    type: 'agent_thought',
+    agentId: reviewerId,
+    role,
+    message: '已超出任务 token 预算，改由规则引擎完成本次审查'
+  })
+  const fallback = runRuleOnlyReview(role, code, language)
+  onEvent({
+    type: 'agent_done',
+    agentId: reviewerId,
+    role,
+    message: `${role} 审查完成（预算降级，${fallback.issues.length} 个问题）`
+  })
+  return { ...fallback, method: 'rule-fallback' as const }
 }
 
 /** P1: 纯规则引擎降级审查（LLM 不可用时的回退） */
@@ -388,38 +462,22 @@ export function resolveReviewerRoles(reviewConfig?: ReviewConfig): AgentRole[] {
   return ALL_REVIEWER_ROLES.filter(role => requested.includes(role as ReviewDimension))
 }
 
-/**
- * REQ-14：按审查配置收敛最终问题列表。
- * 先按 severityThreshold 过滤，再按「严重度 → 行号」排序后用 maxIssues 截断。
- */
-export function applyReviewConfig(issues: Issue[], reviewConfig?: ReviewConfig): Issue[] {
-  if (!reviewConfig) return issues
-  const weight: Record<Issue['severity'], number> = { critical: 0, warning: 1, suggestion: 2 }
-  let result = issues
+/** 兼容旧导入路径：过滤与截断的实现已收口到 report-postprocess */
+export { applyReviewConfig }
 
-  if (reviewConfig.severityThreshold) {
-    const threshold = weight[reviewConfig.severityThreshold] ?? 2
-    result = result.filter(issue => (weight[issue.severity] ?? 9) <= threshold)
-  }
-
-  if (reviewConfig.maxIssues && reviewConfig.maxIssues > 0) {
-    result = [...result]
-      .sort((a, b) => weight[a.severity] - weight[b.severity] || a.line - b.line)
-      .slice(0, reviewConfig.maxIssues)
-  }
-
-  return result
+/** 审查任务的运行输入（取代原先 7 个位置参数） */
+export interface ReviewRunInput {
+  taskId: string
+  code: string
+  language: string
+  onEvent: (event: ReviewEvent) => void
+  scopeId?: string
+  signal?: AbortSignal
+  reviewConfig?: ReviewConfig
 }
 
-async function runReviewTask(
-  taskId: string,
-  code: string,
-  language: string,
-  onEvent: (event: ReviewEvent) => void,
-  scopeId?: string,
-  signal?: AbortSignal,
-  reviewConfig?: ReviewConfig
-): Promise<ReportContent> {
+async function runReviewTask(input: ReviewRunInput): Promise<ReportContent> {
+  const { taskId, code, language, onEvent, scopeId, signal, reviewConfig } = input
   const t0 = performance.now()
   logger.info('审查任务开始', { taskId, language, codeLength: code.length })
   onEvent({ type: 'orchestrator_start', message: '正在分析代码结构...' })
@@ -573,14 +631,20 @@ async function runReviewTask(
   // ═══════════════════════════════════════════════════════
   // REQ-14：只运行请求指定的维度；未指定则四个维度全跑
   const reviewerRoles = resolveReviewerRoles(reviewConfig)
-  const reviewerResults: Record<string, { issues: Issue[]; score: number }> = {}
+  const reviewerResults: Record<string, AgentResult> = {}
   const reviewStatus: Record<string, 'success' | 'fallback' | 'failed'> = {}
 
   // REQ-11：每个 reviewer 一份治理计数器（该 reviewer 的重试共享），另加任务级 token 预算
   const config = getConfig()
   const guards: Record<string, ToolCallGuard> = {}
   const budget = createTaskBudget(config.agent.taskTokenBudget)
-  let budgetExceeded = false
+  let budgetExceededAt: BudgetStop | undefined
+  const reviewerBudget: ReviewerBudget = {
+    budget,
+    markExceeded(stop) {
+      if (!budgetExceededAt) budgetExceededAt = stop
+    }
+  }
 
   // 为每个 reviewer 记录开始时间
   const reviewerStartTimes: Record<string, number> = {}
@@ -622,21 +686,8 @@ async function runReviewTask(
       const result = await withReviewerSpan(role, async () => {
         // REQ-11：预算耗尽后不再调用 LLM，该维度直接使用规则引擎
         if (budget.isExceeded()) {
-          budgetExceeded = true
-          onEvent({
-            type: 'agent_thought',
-            agentId: reviewerId,
-            role,
-            message: '已超出任务 token 预算，改由规则引擎完成本次审查'
-          })
-          const fallback = runRuleOnlyReview(role, code, language)
-          onEvent({
-            type: 'agent_done',
-            agentId: reviewerId,
-            role,
-            message: `${role} 审查完成（预算降级，${fallback.issues.length} 个问题）`
-          })
-          return { ...fallback, method: 'rule-fallback' as const }
+          reviewerBudget.markExceeded({ role, stage: 'start' })
+          return budgetFallback(role, reviewerId, code, language, onEvent)
         }
 
         return runReviewer(
@@ -649,7 +700,8 @@ async function runReviewTask(
           onEvent,
           scopeId,
           signal,
-          guard
+          guard,
+          reviewerBudget
         )
       })
       agentLatency.reviewers[role] = Math.round(performance.now() - reviewerStartTimes[role])
@@ -732,7 +784,7 @@ async function runReviewTask(
 
   // 使用 generateReport 工具生成最终报告
   const reportTool = toolRegistry.get('generateReport')
-  let finalReport: ReportContent
+  let reportScore = overallScore
   if (reportTool) {
     const reportResult = await reportTool.execute({
       collectionResult,
@@ -741,58 +793,43 @@ async function runReviewTask(
     })
     try {
       const parsed = JSON.parse(reportResult)
-      finalReport = {
-        issues: mergedIssues,
-        score: parsed.score || overallScore,
-        agentResults: reviewerResults as unknown as Record<string, AgentResult>,
-        reviewStatus
-      }
+      reportScore = parsed.score || overallScore
     } catch {
-      finalReport = {
-        issues: mergedIssues,
-        score: overallScore,
-        agentResults: reviewerResults as unknown as Record<string, AgentResult>,
-        reviewStatus
-      }
-    }
-  } else {
-    finalReport = {
-      issues: mergedIssues,
-      score: overallScore,
-      agentResults: reviewerResults as unknown as Record<string, AgentResult>,
-      reviewStatus
+      // 报告工具输出无法解析时沿用聚合评分
     }
   }
 
-  // REQ-10：报告落库前对问题描述与建议做密钥脱敏，并记录注入检测结论
-  finalReport.issues = finalReport.issues.map(issue => ({
-    ...issue,
-    message: redactSecrets(issue.message),
-    suggestion: redactSecrets(issue.suggestion)
-  }))
-  // REQ-14：按 severityThreshold 过滤、按 maxIssues 截断
-  finalReport.issues = applyReviewConfig(finalReport.issues, reviewConfig)
+  const draftReport: ReportContent = {
+    issues: mergedIssues,
+    score: reportScore,
+    agentResults: reviewerResults,
+    reviewStatus
+  }
 
   if (injectionFindings.length > 0) {
-    finalReport.security = {
+    draftReport.security = {
       injectionSuspected: true,
       findings: injectionFindings.map(item => ({
         line: item.line,
         pattern: item.pattern,
-        excerpt: redactSecrets(item.excerpt)
+        excerpt: item.excerpt
       }))
     }
   }
 
   // REQ-11：汇总 ReAct 治理统计，只有真正发生工具调用、熔断或预算降级时才写入报告
-  const governance = {
+  const governance: NonNullable<ReportContent['governance']> = {
     loopBreaks: Object.values(guards).reduce((sum, item) => sum + item.loopBreaks, 0),
     toolCalls: Object.values(guards).reduce((sum, item) => sum + item.toolCalls, 0),
-    budgetExceeded
+    budgetExceeded: budgetExceededAt !== undefined
   }
+  if (budgetExceededAt) governance.budgetExceededAt = budgetExceededAt
   if (governance.loopBreaks > 0 || governance.toolCalls > 0 || governance.budgetExceeded) {
-    finalReport.governance = governance
+    draftReport.governance = governance
   }
+
+  // REQ-10 / REQ-14：脱敏与审查配置统一在此收口，覆盖顶层与各维度结果
+  const finalReport = finalizeReport(draftReport, reviewConfig)
 
   const t4 = performance.now()
   agentLatency.reportGeneration = Math.round(t4 - t3)

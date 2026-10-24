@@ -5,7 +5,8 @@ import type { AppConfig } from './config'
 import { AppError } from './errors'
 import { createRateLimiter } from './middleware/rateLimiter'
 import { createApiKeyAuth } from './middleware/apiKeyAuth'
-import { tasksRouter, metricsRouter } from './routes/tasks'
+import { tasksRouter, publishViaTaskProducer } from './routes/tasks'
+import { metricsRouter } from './routes/metrics'
 import { createHealthRouter, type HealthDeps } from './routes/health'
 import { createDocsRouter } from './routes/docs'
 import { createGitHubWebhookRouter } from './integrations/github/webhook'
@@ -28,7 +29,7 @@ export interface AppDeps {
   rateLimits?: { global?: RateLimitSpec; review?: RateLimitSpec }
   /** 是否挂载 /mcp（默认 true） */
   mountMcp?: boolean
-  /** REQ-15：Webhook 创建任务后的入队函数 */
+  /** REQ-15：Webhook 创建任务后的入队函数，缺省复用 routes/tasks 注入的同一个生产者 */
   publishTask?: (taskId: string) => Promise<void>
 }
 
@@ -103,7 +104,7 @@ export function createApp(deps: AppDeps): Express {
     '/api/webhooks',
     createGitHubWebhookRouter({
       secret: config.github.webhookSecret,
-      publishTask: deps.publishTask
+      publishTask: deps.publishTask ?? publishViaTaskProducer
     })
   )
 

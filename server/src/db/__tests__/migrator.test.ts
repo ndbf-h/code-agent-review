@@ -127,7 +127,11 @@ describe('runMigrations', () => {
 describe('内置迁移清单', () => {
   it('id 合法、唯一且递增', () => {
     expect(() => assertMigrationOrder(migrations)).not.toThrow()
-    expect(migrations.map(x => x.id)).toEqual(['001_initial_schema', '002_task_review_config'])
+    expect(migrations.map(x => x.id)).toEqual([
+      '001_initial_schema',
+      '002_task_review_config',
+      '003_task_source_dedupe'
+    ])
   })
 
   it('001 覆盖全部核心表且语句幂等（IF NOT EXISTS / OR REPLACE）', async () => {
@@ -170,5 +174,15 @@ describe('内置迁移清单', () => {
       'ALTER TABLE tasks ADD COLUMN IF NOT EXISTS review_config JSONB',
       'ALTER TABLE tasks ADD COLUMN IF NOT EXISTS source JSONB'
     ])
+  })
+
+  it('003 新增 dedupe_key 列与部分唯一索引，不约束历史数据', async () => {
+    const statements: string[] = []
+    await migrations[2].up(async sql => {
+      statements.push(sql)
+    })
+    expect(statements[0]).toBe('ALTER TABLE tasks ADD COLUMN IF NOT EXISTS dedupe_key TEXT')
+    expect(statements[1]).toMatch(/^CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_dedupe_key/)
+    expect(statements[1]).toMatch(/WHERE dedupe_key IS NOT NULL$/)
   })
 })

@@ -2,6 +2,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { toolRegistry, type Tool } from '../agent/tool-registry'
 import { createLogger } from '../logger'
+import { getConfig } from '../config'
 
 const logger = createLogger('mcp-client')
 
@@ -88,7 +89,7 @@ async function mountSingleServer(entry: McpServerEntry): Promise<number> {
 
 /** 启动时调用（registerAllTools 之后）：挂载所有配置的外部 MCP Server */
 export async function mountExternalMcpTools(): Promise<void> {
-  const entries = parseMcpServerList(process.env.MCP_CLIENT_SERVERS)
+  const entries = parseMcpServerList(getConfig().mcp.clientServers)
   if (entries.length === 0) return
 
   await Promise.all(

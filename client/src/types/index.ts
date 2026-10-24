@@ -1,54 +1,32 @@
-type TaskStatus =
-  'pending' | 'orchestrating' | 'reviewing' | 'summarizing' | 'completed' | 'failed' | 'cancelled'
-type AgentRole = 'orchestrator' | 'security' | 'performance' | 'style' | 'logic'
-type Severity = 'critical' | 'warning' | 'suggestion'
+/**
+ * 前端类型入口（REQ-12 / CONTRIBUTING §九）。
+ *
+ * 与服务端共享的类型一律从 `shared/types.ts` 重导出，保持单一真源；
+ * 本文件只保留前端独有的类型（ChatMessage、TaskItem 等），
+ * 以及 `ReviewReport`（即 shared 的 `ReportContent`）在前端的惯用名。
+ */
+import type { AgentRole, ReportContent, TaskStatus } from '../../../shared/types'
 
-/** 审查维度与请求级配置（与服务端 shared/types.ts 保持一致，REQ-14） */
-type ReviewDimension = 'security' | 'performance' | 'style' | 'logic'
+/** 报告内容在前端的惯用名（与 shared 的 ReportContent 为同一类型） */
+type ReviewReport = ReportContent
 
-interface ReviewConfig {
-  instructions?: string
-  dimensions?: ReviewDimension[]
-  severityThreshold?: Severity
-  maxIssues?: number
-}
+export type {
+  TaskStatus,
+  AgentRole,
+  Severity,
+  ReviewDimension,
+  ReviewConfig,
+  Issue,
+  AgentResult,
+  InjectionFinding,
+  ReportSecurity,
+  ReportGovernance,
+  ReportContent,
+  ReviewerStatus
+} from '../../../shared/types'
 
-interface Issue {
-  line: number
-  severity: Severity
-  category: string
-  message: string
-  suggestion: string
-}
-
-/** 疑似 prompt injection 检测记录（与服务端 shared/types.ts 保持一致） */
-interface ReportInjectionFinding {
-  line: number
-  pattern: string
-  excerpt: string
-}
-
-/** 报告输入安全信息 */
-interface ReportSecurity {
-  injectionSuspected: boolean
-  findings: ReportInjectionFinding[]
-}
-
-/** ReAct 治理统计 */
-interface ReportGovernance {
-  loopBreaks: number
-  toolCalls: number
-  budgetExceeded: boolean
-}
-
-interface ReviewReport {
-  issues: Issue[]
-  score: number
-  agentResults: Record<string, { issues: Issue[]; score: number }>
-  reviewStatus?: Record<string, 'success' | 'fallback' | 'failed'>
-  security?: ReportSecurity
-  governance?: ReportGovernance
-}
+/** 报告内容在前端的惯用名（与 shared 的 ReportContent 为同一类型） */
+export type { ReportContent as ReviewReport } from '../../../shared/types'
 
 interface ChatMessage {
   id: string
@@ -90,17 +68,4 @@ interface FixResult {
   changes: FixChange[]
 }
 
-export type {
-  TaskStatus,
-  AgentRole,
-  Severity,
-  ReviewDimension,
-  ReviewConfig,
-  Issue,
-  ReviewReport,
-  ChatMessage,
-  TaskItem,
-  TaskListResponse,
-  FixChange,
-  FixResult
-}
+export type { ChatMessage, TaskItem, TaskListResponse, FixChange, FixResult }

@@ -35,9 +35,8 @@ async function main() {
           .then(() => true),
       isRabbitConnected: () => rabbit.isConnected(),
       checkLlm: () => llmClient.healthCheck()
-    },
-    // REQ-15：Webhook 创建的任务需要入队，复用同一个生产者
-    publishTask: taskId => producer.publishTask(taskId)
+    }
+    // REQ-15：Webhook 入队缺省复用 setTaskProducer 注入的同一个生产者
   })
 
   await initDb()
