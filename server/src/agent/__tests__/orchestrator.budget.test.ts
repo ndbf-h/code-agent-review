@@ -61,8 +61,13 @@ describe('runReviewTask token 预算（REQ-11）', () => {
       recordLlmUsage({ model: 'fake', promptTokens: 10, completionTokens: 0 })
 
       const events: string[] = []
-      const report = await runReviewTask('task-budget', 'const a = 1', 'javascript', event => {
-        events.push(event.type)
+      const report = await runReviewTask({
+        taskId: 'task-budget',
+        code: 'const a = 1',
+        language: 'javascript',
+        onEvent: event => {
+          events.push(event.type)
+        }
       })
 
       expect(report.governance?.budgetExceeded).toBe(true)
@@ -84,7 +89,12 @@ describe('runReviewTask token 预算（REQ-11）', () => {
     mocks.state.structuredCalls = 0
     try {
       await withTaskTrace({ taskId: 'task-budget-mid', attempt: 1 }, async () => {
-        const report = await runReviewTask('task-budget-mid', 'const a = 1', 'javascript', () => {})
+        const report = await runReviewTask({
+          taskId: 'task-budget-mid',
+          code: 'const a = 1',
+          language: 'javascript',
+          onEvent: () => {}
+        })
 
         expect(report.governance?.budgetExceeded).toBe(true)
         expect(report.governance?.budgetExceededAt).toBeDefined()

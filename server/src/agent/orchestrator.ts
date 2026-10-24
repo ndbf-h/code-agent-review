@@ -465,15 +465,19 @@ export function resolveReviewerRoles(reviewConfig?: ReviewConfig): AgentRole[] {
 /** 兼容旧导入路径：过滤与截断的实现已收口到 report-postprocess */
 export { applyReviewConfig }
 
-async function runReviewTask(
-  taskId: string,
-  code: string,
-  language: string,
-  onEvent: (event: ReviewEvent) => void,
-  scopeId?: string,
-  signal?: AbortSignal,
+/** 审查任务的运行输入（取代原先 7 个位置参数） */
+export interface ReviewRunInput {
+  taskId: string
+  code: string
+  language: string
+  onEvent: (event: ReviewEvent) => void
+  scopeId?: string
+  signal?: AbortSignal
   reviewConfig?: ReviewConfig
-): Promise<ReportContent> {
+}
+
+async function runReviewTask(input: ReviewRunInput): Promise<ReportContent> {
+  const { taskId, code, language, onEvent, scopeId, signal, reviewConfig } = input
   const t0 = performance.now()
   logger.info('审查任务开始', { taskId, language, codeLength: code.length })
   onEvent({ type: 'orchestrator_start', message: '正在分析代码结构...' })
