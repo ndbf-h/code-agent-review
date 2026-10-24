@@ -14,6 +14,9 @@ type MessageType = 'user_input' | 'agent_thought' | 'tool_call' | 'tool_result' 
 // ── Issue severity ──
 type Severity = 'critical' | 'warning' | 'suggestion'
 
+// ── 审查员执行状态（reviewStatus 取值，REQ-11 降级与失败状态） ──
+type ReviewerStatus = 'success' | 'fallback' | 'failed'
+
 // ── 审查维度与请求级配置（REQ-14） ──
 type ReviewDimension = 'security' | 'performance' | 'style' | 'logic'
 
@@ -83,7 +86,7 @@ interface ReportContent {
   issues: Issue[]
   score: number
   agentResults: Record<string, AgentResult>
-  reviewStatus?: Record<string, 'success' | 'fallback' | 'failed'>
+  reviewStatus?: Record<string, ReviewerStatus>
   /** 输入安全信息，仅在检测到疑似注入时写入 */
   security?: ReportSecurity
   /** ReAct 治理统计，仅在产生熔断/预算事件时写入 */
@@ -151,11 +154,15 @@ export type {
   AgentStatus,
   MessageType,
   Severity,
+  ReviewerStatus,
   ReviewDimension,
   ReviewConfig,
   TaskSource,
   Issue,
   AgentResult,
+  InjectionFinding,
+  ReportSecurity,
+  ReportGovernance,
   ReportContent,
   Task,
   Agent,

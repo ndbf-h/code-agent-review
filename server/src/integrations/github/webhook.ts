@@ -107,9 +107,12 @@ export interface SkippedFile {
   reason: 'file-too-large' | 'total-limit' | 'empty'
 }
 
+/** 多语言混合时的主语言占位值：规则引擎按语言匹配规则，该占位值下多数规则不会命中 */
+const MIXED_LANGUAGE = 'mixed'
+
 export interface CollectedPullRequestCode {
   code: string
-  /** 主语言：仅一种语言时即该语言；多种语言时取变更行数最多者；无文件时为 'mixed' */
+  /** 主语言：仅一种语言时即该语言；多种语言时取变更行数最多者；无文件时为多语言占位值 */
   language: string
   files: string[]
   skipped: SkippedFile[]
@@ -182,9 +185,9 @@ export async function collectPullRequestCode(
   }
 }
 
-/** 变更行数最多的语言；并列时取先出现者；没有文件时为 'mixed' */
+/** 变更行数最多的语言；并列时取先出现者；没有文件时为多语言占位值 */
 function dominantLanguage(changesByLanguage: Map<string, number>): string {
-  let best = 'mixed'
+  let best = MIXED_LANGUAGE
   let bestChanges = -1
   for (const [language, changes] of changesByLanguage) {
     if (changes > bestChanges) {

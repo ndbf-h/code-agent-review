@@ -6,7 +6,7 @@ import axios, { isAxiosError, type AxiosInstance } from 'axios'
  * - `baseURL` 集中在 VITE_API_BASE，取代各组件手工拼接；
  * - 请求拦截器自动附带 `X-API-Key`（密钥保存在 localStorage）；
  * - 401 时派发全局事件，由界面提示用户配置密钥；
- * - `sseUrl()` 为 EventSource 生成带 `api_key` 的地址（无法自定义请求头）。
+ * - `withApiKey()` 为 SSE 请求地址追加 `api_key` 查询参数（EventSource 无法自定义请求头）。
  */
 
 export const API_BASE: string = import.meta.env.VITE_API_BASE || 'http://localhost:3001/api'
@@ -54,11 +54,11 @@ http.interceptors.response.use(
   }
 )
 
-/** 生成 SSE 地址：EventSource 无法自定义请求头，密钥走查询参数 */
-export function sseUrl(path: string): string {
+/** EventSource 无法自定义请求头，密钥通过查询参数传递 */
+export function withApiKey(url: string): string {
   const key = getApiKey()
-  const url = `${API_BASE}${path.startsWith('/') ? path : `/${path}`}`
-  return key ? `${url}?api_key=${encodeURIComponent(key)}` : url
+  if (!key) return url
+  return `${url}${url.includes('?') ? '&' : '?'}api_key=${encodeURIComponent(key)}`
 }
 
 /** 供原生 fetch 使用的鉴权头（流式响应等 axios 不擅长的场景） */
